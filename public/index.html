@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Company Registry</title>
+<style>
+  :root { --ink:#1b1f24; --muted:#5c6670; --line:#d5dae0; --ok:#1a7f37; --bad:#c62828; --bg:#f6f7f9; --accent:#1f4fd8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:640px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  p.lead { margin:0 0 20px; color:var(--muted); }
+  fieldset { border:1px solid var(--line); border-radius:8px; background:#fff; margin:0 0 16px; padding:14px 16px 6px; }
+  legend { font-weight:600; padding:0 6px; }
+  .field { position:relative; margin-bottom:12px; }
+  label { display:block; font-size:.9rem; margin-bottom:4px; }
+  input[type=text] { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:6px; font:inherit; background:#fff; }
+  input[type=text]:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  input.ok { border-color:var(--ok); }
+  input.bad { border-color:var(--bad); }
+  .msg { font-size:.85rem; min-height:1.2em; margin-top:3px; }
+  .msg.ok { color:var(--ok); }
+  .msg.bad { color:var(--bad); }
+  .msg.wait { color:var(--muted); }
+  .hint { font-size:.8rem; color:var(--muted); margin-top:3px; }
+  .drop { position:absolute; left:0; right:0; top:100%; z-index:5; margin-top:2px; background:#fff; border:1px solid var(--line); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.12); display:none; }
+  .drop.show { display:block; }
+  .drop div { padding:8px 12px; display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid #eef0f2; color:var(--muted); }
+  .drop div:last-child { border-bottom:0; }
+  .drop b { color:var(--ink); font-weight:600; }
+  .drop i { font-style:normal; font-size:.78rem; color:var(--bad); white-space:nowrap; }
+  .drop .title { font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; background:#fafbfc; }
+  button { width:100%; padding:13px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:8px; cursor:pointer; }
+  button:disabled { background:#a9b4cc; cursor:not-allowed; }
+  .banner { padding:12px 14px; border-radius:8px; margin-bottom:16px; }
+  .banner.bad { background:#fdecec; color:var(--bad); }
+  .banner.notice { background:#eef3ff; color:#1f3a8a; font-size:.9rem; }
+  .done { background:#fff; border:1px solid var(--line); border-radius:8px; padding:20px; }
+  .done h2 { margin:0 0 8px; color:var(--ok); }
+  .done ol { padding-left:20px; margin:8px 0 0; }
+  .hp { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="formSection">
+    <h1>Company Registry</h1>
+    <p class="lead">Enter your details and 5 different companies that hire (or may hire) for your field. Each company can be taken by only one student, first come first served. You can submit only once.</p>
+
+    <div class="banner notice">Give correct details. Your entries are final and the full list goes to the HOD. A company that is already taken, or a slightly changed spelling of one, will not be accepted.</div>
+    <div id="banner" class="banner bad" hidden></div>
+
+    <form id="form" autocomplete="off" novalidate>
+      <fieldset>
+        <legend>About you</legend>
+        <div class="field">
+          <label for="name">Full name</label>
+          <input type="text" id="name" maxlength="60" data-k="name">
+          <div class="msg" data-m="name"></div>
+        </div>
+        <div class="field">
+          <label for="roll">Roll number</label>
+          <input type="text" id="roll" maxlength="24" data-k="roll">
+          <div class="msg" data-m="roll"></div>
+        </div>
+      </fieldset>
+
+      <div id="companies"></div>
+
+      <div class="hp" aria-hidden="true"><label>Leave empty <input type="text" id="hp" tabindex="-1" autocomplete="off"></label></div>
+
+      <button type="submit" id="submit" disabled>Submit</button>
+      <div class="hint" id="why" style="text-align:center;margin-top:8px"></div>
+    </form>
+  </section>
+
+  <section id="doneSection" class="done" hidden>
+    <h2>Submitted</h2>
+    <div>Thank you. Your companies are saved and cannot be changed.</div>
+    <ol id="doneList"></ol>
+  </section>
+</main>
+
+<script>
+(function () {
+  var COUNT = 5;
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+
+  // ---- build the 5 company blocks ----
+  var box = $('#companies');
+  for (var i = 0; i < COUNT; i++) {
+    var fs = document.createElement('fieldset');
+    fs.innerHTML =
+      '<legend>Company ' + (i + 1) + '</legend>' +
+      '<div class="field"><label>Company name</label>' +
+      '<input type="text" maxlength="80" data-k="cname' + i + '" data-suggest="1">' +
+      '<div class="drop"></div><div class="msg" data-m="cname' + i + '"></div></div>' +
+      '<div class="field"><label>Company website</label>' +
+      '<input type="text" maxlength="120" placeholder="example: wipro.com" data-k="csite' + i + '">' +
+      '<div class="msg" data-m="csite' + i + '"></div>' +
+      '<div class="hint">The company\'s own website. amazon.in and amazon.com count as the same company.</div></div>';
+    box.appendChild(fs);
+  }
+
+  var inputs = {};
+  document.querySelectorAll('input[data-k]').forEach(function (el) { inputs[el.dataset.k] = el; });
+  var keys = Object.keys(inputs);
+
+  // state per field: 'empty' | 'wait' | 'ok' | 'bad'
+  var state = {};
+  keys.forEach(function (k) { state[k] = 'empty'; });
+
+  function setField(k, st, text) {
+    state[k] = st;
+    var el = inputs[k], msg = $('[data-m="' + k + '"]');
+    el.classList.toggle('ok', st === 'ok');
+    el.classList.toggle('bad', st === 'bad');
+    msg.className = 'msg ' + (st === 'ok' ? 'ok' : st === 'bad' ? 'bad' : st === 'wait' ? 'wait' : '');
+    msg.textContent = st === 'ok' ? 'Available' : st === 'wait' ? 'Checking...' : (text || '');
+    if (k === 'name' || k === 'roll') { if (st === 'ok') msg.textContent = ''; }
+    refreshSubmit();
+  }
+
+  function snapshot() {
+    var companies = [];
+    for (var i = 0; i < COUNT; i++) {
+      companies.push({ name: inputs['cname' + i].value, website: inputs['csite' + i].value });
+    }
+    return { name: inputs.name.value, roll: inputs.roll.value, companies: companies, hp: $('#hp').value };
+  }
+
+  function refreshSubmit() {
+    var all = keys.every(function (k) { return state[k] === 'ok'; });
+    $('#submit').disabled = !all;
+    var why = '';
+    if (!all) {
+      var waiting = keys.some(function (k) { return state[k] === 'wait'; });
+      var bad = keys.some(function (k) { return state[k] === 'bad'; });
+      var empty = keys.some(function (k) { return state[k] === 'empty'; });
+      why = waiting ? 'Checking...' : bad ? 'Fix the highlighted fields to continue.' : empty ? 'Fill every field to continue.' : '';
+    }
+    $('#why').textContent = why;
+  }
+
+  // ---- live checking of the whole form ----
+  var seq = 0, timer = null;
+  function schedule(delay) {
+    clearTimeout(timer);
+    var snap = snapshot();
+    keys.forEach(function (k) {
+      if (!inputs[k].value.trim()) setField(k, 'empty', '');
+      else setField(k, 'wait', '');
+    });
+    if (keys.every(function (k) { return state[k] === 'empty'; })) return;
+    timer = setTimeout(function () { runCheck(snap); }, delay);
+  }
+
+  function runCheck(snap) {
+    var mine = ++seq;
+    fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (mine !== seq || !data.student) return;
+        applyResult(data, snap);
+      })
+      .catch(function () {
+        if (mine !== seq) return;
+        keys.forEach(function (k) { if (state[k] === 'wait') setField(k, 'bad', 'Could not check. Check your internet and try again.'); });
+      });
+  }
+
+  function applyResult(data, snap) {
+    function apply(k, value, error) {
+      if (!value.trim()) return setField(k, 'empty', '');
+      if (inputs[k].value !== value) return; // changed again while checking
+      if (error) setField(k, 'bad', error); else setField(k, 'ok', '');
+    }
+    apply('name', snap.name, data.student.name);
+    apply('roll', snap.roll, data.student.roll);
+    for (var i = 0; i < COUNT; i++) {
+      apply('cname' + i, snap.companies[i].name, data.companies[i].name);
+      apply('csite' + i, snap.companies[i].website, data.companies[i].website);
+    }
+  }
+
+  keys.forEach(function (k) {
+    inputs[k].addEventListener('input', function () { schedule(450); });
+    inputs[k].addEventListener('blur', function () { if (state[k] === 'wait') schedule(0); });
+  });
+
+  // ---- typeahead of taken companies ----
+  var suggestSeq = 0, suggestTimer = null;
+  document.querySelectorAll('input[data-suggest]').forEach(function (el) {
+    var drop = el.parentNode.querySelector('.drop');
+    el.addEventListener('input', function () {
+      clearTimeout(suggestTimer);
+      var q = el.value.trim();
+      if (q.replace(/[^a-z0-9]/gi, '').length < 2) { drop.classList.remove('show'); return; }
+      suggestTimer = setTimeout(function () {
+        var mine = ++suggestSeq;
+        fetch('/api/suggest?q=' + encodeURIComponent(q))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (mine !== suggestSeq) return;
+            drop.textContent = '';
+            if (!data.taken.length) { drop.classList.remove('show'); return; }
+            var head = document.createElement('div');
+            head.className = 'title'; head.textContent = 'Already taken by other students';
+            drop.appendChild(head);
+            data.taken.forEach(function (name) {
+              var row = document.createElement('div');
+              var b = document.createElement('b'); b.textContent = name;
+              var tag = document.createElement('i'); tag.textContent = 'Already taken';
+              row.appendChild(b); row.appendChild(tag);
+              drop.appendChild(row);
+            });
+            drop.classList.add('show');
+          })
+          .catch(function () {});
+      }, 250);
+    });
+    el.addEventListener('blur', function () { setTimeout(function () { drop.classList.remove('show'); }, 150); });
+    el.addEventListener('keydown', function (e) { if (e.key === 'Escape') drop.classList.remove('show'); });
+  });
+
+  // ---- submit ----
+  $('#form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = $('#submit');
+    if (btn.disabled) return;
+    btn.disabled = true; btn.textContent = 'Submitting...';
+    $('#banner').hidden = true;
+    var snap = snapshot();
+    fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (res) {
+        btn.textContent = 'Submit';
+        if (res.data.ok) return showDone(snap);
+        if (res.data.student) {
+          applyResult(res.data, snap);
+        }
+        var banner = $('#banner');
+        banner.textContent = res.data.message || 'Some entries need to be changed. See the red messages below.';
+        banner.hidden = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        refreshSubmit();
+      })
+      .catch(function () {
+        btn.textContent = 'Submit';
+        var banner = $('#banner');
+        banner.textContent = 'Could not reach the server. Check your internet and press Submit again.';
+        banner.hidden = false;
+        refreshSubmit();
+      });
+  });
+
+  function showDone(snap) {
+    $('#formSection').hidden = true;
+    var list = $('#doneList');
+    snap.companies.forEach(function (c) {
+      var li = document.createElement('li');
+      li.textContent = c.name.trim() + ' (' + c.website.trim() + ')';
+      list.appendChild(li);
+    });
+    $('#doneSection').hidden = false;
+    window.scrollTo(0, 0);
+  }
+
+  refreshSubmit();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/*.js": { "maxDuration": 15 }
+  },
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" }
+  ]
+}

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin - Company Registry</title>
+<style>
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#1b1f24; background:#f6f7f9; }
+  main { max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:1.3rem; margin:0 0 12px; }
+  input, button { font:inherit; padding:9px 12px; border-radius:6px; border:1px solid #c8cdd3; }
+  button { background:#1f4fd8; color:#fff; border-color:#1f4fd8; cursor:pointer; }
+  button.plain { background:#fff; color:#1b1f24; border-color:#c8cdd3; }
+  button.danger { background:#fff; color:#c62828; border-color:#e6b3b3; padding:4px 8px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  .stat { background:#fff; border:1px solid #d5dae0; border-radius:8px; padding:10px 14px; }
+  .err { color:#c62828; margin-bottom:10px; }
+  .scroll { overflow-x:auto; background:#fff; border:1px solid #d5dae0; border-radius:8px; }
+  table { border-collapse:collapse; width:100%; min-width:760px; }
+  th, td { padding:7px 10px; border-bottom:1px solid #eef0f2; text-align:left; vertical-align:top; }
+  th { background:#fafbfc; font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; }
+  td small { color:#5c6670; display:block; }
+  h2 { font-size:1.05rem; margin:24px 0 8px; }
+  ul { margin:0; padding-left:20px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Company Registry - Admin</h1>
+
+  <div class="row" id="login">
+    <input type="password" id="pw" placeholder="Admin password">
+    <button id="go">Open</button>
+    <span class="err" id="loginErr"></span>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="row">
+      <div class="stat"><b id="sCount">0</b> students submitted</div>
+      <div class="stat"><b id="sCompanies">0</b> companies</div>
+      <button id="dlXlsx">Download Excel</button>
+      <button id="dlCsv" class="plain">Download CSV</button>
+      <button id="reload" class="plain">Refresh</button>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>#</th><th>Roll No</th><th>Name</th><th>Companies</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <h2>Similar-looking names (for a quick skim only, nothing is blocked)</h2>
+    <ul id="similar"></ul>
+  </div>
+</main>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var password = '';
+
+  function api(action, opts) {
+    opts = opts || {};
+    return fetch('/api/admin?action=' + action, {
+      method: opts.method || 'GET',
+      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+  }
+
+  function cell(text, small) {
+    var td = document.createElement('td');
+    td.textContent = text;
+    if (small) { var s = document.createElement('small'); s.textContent = small; td.appendChild(s); }
+    return td;
+  }
+
+  function load() {
+    api('list').then(function (r) {
+      if (r.status === 401) { $('#loginErr').textContent = 'Wrong password.'; $('#panel').hidden = true; $('#login').hidden = false; return null; }
+      return r.json();
+    }).then(function (d) {
+      if (!d) return;
+      $('#login').hidden = true; $('#panel').hidden = false;
+      $('#sCount').textContent = d.count;
+      $('#sCompanies').textContent = d.companyCount;
+      var body = $('#rows'); body.textContent = '';
+      d.students.forEach(function (s, i) {
+        var tr = document.createElement('tr');
+        tr.appendChild(cell(i + 1));
+        tr.appendChild(cell(s.roll_no));
+        tr.appendChild(cell(s.name, new Date(s.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })));
+        var td = document.createElement('td');
+        s.companies.forEach(function (c) {
+          var line = document.createElement('div');
+          line.textContent = c.name + ' - ' + c.website;
+          td.appendChild(line);
+        });
+        tr.appendChild(td);
+        var act = document.createElement('td');
+        var del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete';
+        del.onclick = function () {
+          if (!confirm('Delete the submission of ' + s.name + ' (' + s.roll_no + ')? They will be able to submit again and their companies become free.')) return;
+          api('delete', { method: 'POST', body: { roll: s.roll_no } }).then(load);
+        };
+        act.appendChild(del); tr.appendChild(act);
+        body.appendChild(tr);
+      });
+      var ul = $('#similar'); ul.textContent = '';
+      if (!d.similar.length) { var li = document.createElement('li'); li.textContent = 'None found.'; ul.appendChild(li); }
+      d.similar.forEach(function (p) { var li = document.createElement('li'); li.textContent = p[0] + '  <->  ' + p[1]; ul.appendChild(li); });
+    });
+  }
+
+  function download(action, filename) {
+    api(action).then(function (r) { return r.blob(); }).then(function (blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+  }
+
+  $('#go').onclick = function () { password = $('#pw').value; $('#loginErr').textContent = ''; load(); };
+  $('#pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#go').click(); });
+  $('#reload').onclick = load;
+  $('#dlXlsx').onclick = function () { download('xlsx', 'company-registry.xlsx'); };
+  $('#dlCsv').onclick = function () { download('csv', 'company-registry.csv'); };
+})();
+</script>
+</body>
+</html>
