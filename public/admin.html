@@ -4,32 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Admin - Company Registry</title>
+<title>Admin - Company Research Portal</title>
+<link rel="stylesheet" href="/style.css">
 <style>
-  body { margin:0; font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#1b1f24; background:#f6f7f9; }
-  main { max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
-  h1 { font-size:1.3rem; margin:0 0 12px; }
-  input, button { font:inherit; padding:9px 12px; border-radius:6px; border:1px solid #c8cdd3; }
-  button { background:#1f4fd8; color:#fff; border-color:#1f4fd8; cursor:pointer; }
-  button.plain { background:#fff; color:#1b1f24; border-color:#c8cdd3; }
-  button.danger { background:#fff; color:#c62828; border-color:#e6b3b3; padding:4px 8px; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
-  .stat { background:#fff; border:1px solid #d5dae0; border-radius:8px; padding:10px 14px; }
-  .err { color:#c62828; margin-bottom:10px; }
-  .scroll { overflow-x:auto; background:#fff; border:1px solid #d5dae0; border-radius:8px; }
-  table { border-collapse:collapse; width:100%; min-width:760px; }
-  th, td { padding:7px 10px; border-bottom:1px solid #eef0f2; text-align:left; vertical-align:top; }
-  th { background:#fafbfc; font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; }
-  td small { color:#5c6670; display:block; }
-  h2 { font-size:1.05rem; margin:24px 0 8px; }
-  ul { margin:0; padding-left:20px; }
-  [hidden] { display:none !important; }
+  .wrap.wide { max-width:1320px; }
+  .hero { padding:26px 0 22px; }
+  .hero h1 { font-size:1.6rem; margin:0 0 4px; }
+  main.wrap { padding-top:24px; padding-bottom:60px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+  .row input { width:260px; }
+  button { height:42px; padding:0 18px; font:600 .9rem "Segoe UI",system-ui,sans-serif; letter-spacing:.02em; color:#fffaf0; background:var(--navy); border:1px solid var(--navy); border-radius:7px; cursor:pointer; }
+  button:hover { background:var(--navy2); }
+  button.plain { background:var(--paper); color:var(--navy); border-color:var(--line2); }
+  button.plain:hover { background:var(--tint); }
+  button.danger { background:var(--paper); color:var(--bad); border-color:#e6c3bc; height:30px; padding:0 12px; font-size:.78rem; }
+  button.danger:hover { background:var(--badbg); }
+  .stat { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:7px 16px; color:var(--muted); font-size:.88rem; }
+  .stat b { font:700 1.35rem Georgia,serif; color:var(--navy); margin-right:6px; }
+  .err { color:var(--bad); font-size:.9rem; }
+  .scroll { overflow-x:auto; background:var(--paper); border:1px solid var(--line); border-radius:10px; }
+  table { border-collapse:collapse; width:100%; min-width:1100px; }
+  th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:.88rem; word-break:break-word; }
+  th { background:var(--navy); color:#f7f1e1; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; font-weight:600; white-space:nowrap; }
+  tr.first td { border-top:2px solid var(--line2); }
+  tr.alt td { background:#faf4e6; }
+  td.student { font-weight:600; }
+  td.student small { display:block; color:var(--muted); font-weight:400; font-size:.75rem; }
+  td a { color:var(--navy2); }
+  td.na { color:#b3ab9a; }
+  h2.sub { font-size:1.05rem; color:var(--navy); margin:28px 0 8px; }
+  ul.plainlist { margin:0; padding-left:20px; color:var(--muted); }
 </style>
 </head>
 <body>
-<main>
-  <h1>Company Registry - Admin</h1>
-
+<header class="hero"><div class="wrap wide"><div class="eyebrow">Administration</div><h1>Company Research Portal</h1><p>Review every submission and download the complete record.</p></div></header>
+<main class="wrap wide">
   <div class="row" id="login">
     <input type="password" id="pw" placeholder="Admin password">
     <button id="go">Open</button>
@@ -38,8 +47,8 @@
 
   <div id="panel" hidden>
     <div class="row">
-      <div class="stat"><b id="sCount">0</b> students submitted</div>
-      <div class="stat"><b id="sCompanies">0</b> companies</div>
+      <div class="stat"><b id="sCount">0</b>students submitted</div>
+      <div class="stat"><b id="sCompanies">0</b>companies</div>
       <button id="dlXlsx">Download Excel</button>
       <button id="dlCsv" class="plain">Download CSV</button>
       <button id="reload" class="plain">Refresh</button>
@@ -47,13 +56,16 @@
 
     <div class="scroll">
       <table>
-        <thead><tr><th>#</th><th>Roll No</th><th>Name</th><th>Companies</th><th></th></tr></thead>
+        <thead><tr>
+          <th>S.No</th><th>Student Name</th><th>RTU Roll No</th><th>Company</th><th>Website</th><th>Domain</th>
+          <th>Domain-specific Link / Email</th><th>General Fresher Hiring Link / Email</th><th></th>
+        </tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
 
-    <h2>Similar-looking names (for a quick skim only, nothing is blocked)</h2>
-    <ul id="similar"></ul>
+    <h2 class="sub">Similar-looking company names (a quick skim only, nothing is blocked)</h2>
+    <ul id="similar" class="plainlist"></ul>
   </div>
 </main>
 
@@ -71,11 +83,23 @@
     });
   }
 
-  function cell(text, small) {
-    var td = document.createElement('td');
-    td.textContent = text;
-    if (small) { var s = document.createElement('small'); s.textContent = small; td.appendChild(s); }
-    return td;
+  function td(text, cls) {
+    var el = document.createElement('td');
+    if (cls) el.className = cls;
+    el.textContent = text;
+    return el;
+  }
+
+  // A link or email becomes a clickable cell; an empty value shows a dash.
+  function linkCell(value) {
+    var el = document.createElement('td');
+    if (!value) { el.className = 'na'; el.textContent = '-'; return el; }
+    var href = /^https?:\/\//i.test(value) ? value : /^[^\s@]+@[^\s@]+$/.test(value) ? 'mailto:' + value : null;
+    if (!href) { el.textContent = value; return el; }
+    var a = document.createElement('a');
+    a.href = href; a.textContent = value; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    el.appendChild(a);
+    return el;
   }
 
   function load() {
@@ -87,28 +111,39 @@
       $('#login').hidden = true; $('#panel').hidden = false;
       $('#sCount').textContent = d.count;
       $('#sCompanies').textContent = d.companyCount;
+
       var body = $('#rows'); body.textContent = '';
-      d.students.forEach(function (s, i) {
-        var tr = document.createElement('tr');
-        tr.appendChild(cell(i + 1));
-        tr.appendChild(cell(s.roll_no));
-        tr.appendChild(cell(s.name, new Date(s.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })));
-        var td = document.createElement('td');
-        s.companies.forEach(function (c) {
-          var line = document.createElement('div');
-          line.textContent = c.name + ' - ' + c.website;
-          td.appendChild(line);
+      d.students.forEach(function (s, si) {
+        s.companies.forEach(function (c, ci) {
+          var tr = document.createElement('tr');
+          tr.className = (ci === 0 ? 'first ' : '') + (si % 2 ? 'alt' : '');
+          // Student columns repeat on every row, exactly as in the downloaded sheet.
+          tr.appendChild(td(si + 1));
+          var name = td(s.name, 'student');
+          var when = document.createElement('small');
+          when.textContent = ci === 0 ? new Date(s.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '';
+          name.appendChild(when);
+          tr.appendChild(name);
+          tr.appendChild(td(s.roll_no));
+          tr.appendChild(td(c.name));
+          tr.appendChild(td(c.website));
+          tr.appendChild(td(c.domain || '-'));
+          tr.appendChild(linkCell(c.domain_link));
+          tr.appendChild(linkCell(c.general_link));
+          var act = document.createElement('td');
+          if (ci === 0) {
+            var del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete';
+            del.onclick = function () {
+              if (!confirm('Delete the submission of ' + s.name + ' (' + s.roll_no + ')? They can submit again and their companies become free for others.')) return;
+              api('delete', { method: 'POST', body: { roll: s.roll_no } }).then(load);
+            };
+            act.appendChild(del);
+          }
+          tr.appendChild(act);
+          body.appendChild(tr);
         });
-        tr.appendChild(td);
-        var act = document.createElement('td');
-        var del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete';
-        del.onclick = function () {
-          if (!confirm('Delete the submission of ' + s.name + ' (' + s.roll_no + ')? They will be able to submit again and their companies become free.')) return;
-          api('delete', { method: 'POST', body: { roll: s.roll_no } }).then(load);
-        };
-        act.appendChild(del); tr.appendChild(act);
-        body.appendChild(tr);
       });
+
       var ul = $('#similar'); ul.textContent = '';
       if (!d.similar.length) { var li = document.createElement('li'); li.textContent = 'None found.'; ul.appendChild(li); }
       d.similar.forEach(function (p) { var li = document.createElement('li'); li.textContent = p[0] + '  <->  ' + p[1]; ul.appendChild(li); });
@@ -126,8 +161,8 @@
   $('#go').onclick = function () { password = $('#pw').value; $('#loginErr').textContent = ''; load(); };
   $('#pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#go').click(); });
   $('#reload').onclick = load;
-  $('#dlXlsx').onclick = function () { download('xlsx', 'company-registry.xlsx'); };
-  $('#dlCsv').onclick = function () { download('csv', 'company-registry.csv'); };
+  $('#dlXlsx').onclick = function () { download('xlsx', 'company-research.xlsx'); };
+  $('#dlCsv').onclick = function () { download('csv', 'company-research.csv'); };
 })();
 </script>
 </body>

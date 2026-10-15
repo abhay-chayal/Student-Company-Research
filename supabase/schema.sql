@@ -1,4 +1,5 @@
--- Run this whole file once in Supabase: SQL Editor -> New query -> paste -> Run.
+-- Run this whole file in Supabase: SQL Editor -> New query -> paste -> Run.
+-- Safe to run again at any time (it only adds what is missing and updates the function).
 
 create table if not exists students (
   id          bigserial primary key,
@@ -19,6 +20,11 @@ create table if not exists companies (
   created_at  timestamptz not null default now(),
   unique (student_id, position)
 );
+
+-- Added later: the role the student targets, and where to apply.
+alter table companies add column if not exists domain        text not null default '';
+alter table companies add column if not exists domain_link   text not null default '';
+alter table companies add column if not exists general_link  text not null default '';
 
 -- Only the server (service role key) may touch the tables. No public access.
 alter table students  enable row level security;
@@ -80,9 +86,12 @@ begin
     v_pos := 0;
     for v_item in select * from jsonb_array_elements(p_companies) loop
       v_pos := v_pos + 1;
-      insert into companies (student_id, position, name, name_key, website, domain_key)
+      insert into companies (student_id, position, name, name_key, website, domain_key,
+                             domain, domain_link, general_link)
       values (v_student_id, v_pos, v_item->>'name', v_item->>'name_key',
-              v_item->>'website', v_item->>'domain_key');
+              v_item->>'website', v_item->>'domain_key',
+              coalesce(v_item->>'domain', ''), coalesce(v_item->>'domain_link', ''),
+              coalesce(v_item->>'general_link', ''));
     end loop;
   exception when unique_violation then
     -- Safety net: the unique constraints refused something. Everything above is rolled back.

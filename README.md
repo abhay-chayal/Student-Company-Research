@@ -1,6 +1,6 @@
-# Company Registry
+# Company Research Portal
 
-Each student submits their name, roll number and 5 companies (name + official website).
+Each student submits their name, roll number and 5 companies: name, official website, domain (role), and a domain-specific and/or general fresher hiring link or email.
 A company can be taken by only one student. Admin downloads everything as Excel/CSV.
 
 ## How duplicates are stopped
@@ -18,7 +18,7 @@ Without Supabase keys it uses temporary memory storage. To try the admin page se
 (PowerShell: `$env:ADMIN_PASSWORD="test123"; npm run dev`).
 
 ## Deploy (free)
-1. **Supabase**: create a project -> SQL Editor -> paste `supabase/schema.sql` -> Run.
+1. **Supabase**: create a project -> SQL Editor -> paste `supabase/schema.sql` -> Run. (Re-run it after every update that changes the database; it is safe to run again.)
    Then Project Settings -> API: copy the *Project URL* and the *service_role* key.
 2. **Vercel**: push this folder to a GitHub repo -> vercel.com -> Add New Project -> import it (Framework: Other).
    Add the environment variables from `.env.example`, then Deploy.

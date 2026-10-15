@@ -12,6 +12,7 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 const routes = {
   '/api/check': require('../api/check'),
   '/api/suggest': require('../api/suggest'),
+  '/api/config': require('../api/config'),
   '/api/submit': require('../api/submit'),
   '/api/admin': require('../api/admin'),
 };

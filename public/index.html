@@ -3,114 +3,167 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Company Registry</title>
-<style>
-  :root { --ink:#1b1f24; --muted:#5c6670; --line:#d5dae0; --ok:#1a7f37; --bad:#c62828; --bg:#f6f7f9; --accent:#1f4fd8; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg); }
-  main { max-width:640px; margin:0 auto; padding:24px 16px 64px; }
-  h1 { font-size:1.4rem; margin:0 0 4px; }
-  p.lead { margin:0 0 20px; color:var(--muted); }
-  fieldset { border:1px solid var(--line); border-radius:8px; background:#fff; margin:0 0 16px; padding:14px 16px 6px; }
-  legend { font-weight:600; padding:0 6px; }
-  .field { position:relative; margin-bottom:12px; }
-  label { display:block; font-size:.9rem; margin-bottom:4px; }
-  input[type=text] { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:6px; font:inherit; background:#fff; }
-  input[type=text]:focus { outline:2px solid var(--accent); outline-offset:-1px; }
-  input.ok { border-color:var(--ok); }
-  input.bad { border-color:var(--bad); }
-  .msg { font-size:.85rem; min-height:1.2em; margin-top:3px; }
-  .msg.ok { color:var(--ok); }
-  .msg.bad { color:var(--bad); }
-  .msg.wait { color:var(--muted); }
-  .hint { font-size:.8rem; color:var(--muted); margin-top:3px; }
-  .drop { position:absolute; left:0; right:0; top:100%; z-index:5; margin-top:2px; background:#fff; border:1px solid var(--line); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.12); display:none; }
-  .drop.show { display:block; }
-  .drop div { padding:8px 12px; display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid #eef0f2; color:var(--muted); }
-  .drop div:last-child { border-bottom:0; }
-  .drop b { color:var(--ink); font-weight:600; }
-  .drop i { font-style:normal; font-size:.78rem; color:var(--bad); white-space:nowrap; }
-  .drop .title { font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; background:#fafbfc; }
-  button { width:100%; padding:13px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:8px; cursor:pointer; }
-  button:disabled { background:#a9b4cc; cursor:not-allowed; }
-  .banner { padding:12px 14px; border-radius:8px; margin-bottom:16px; }
-  .banner.bad { background:#fdecec; color:var(--bad); }
-  .banner.notice { background:#eef3ff; color:#1f3a8a; font-size:.9rem; }
-  .done { background:#fff; border:1px solid var(--line); border-radius:8px; padding:20px; }
-  .done h2 { margin:0 0 8px; color:var(--ok); }
-  .done ol { padding-left:20px; margin:8px 0 0; }
-  .hp { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
-  [hidden] { display:none !important; }
-</style>
+<title>Company Research Portal</title>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<main>
-  <section id="formSection">
-    <h1>Company Registry</h1>
-    <p class="lead">Enter your details and 5 different companies that hire (or may hire) for your field. Each company can be taken by only one student, first come first served. You can submit only once.</p>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Foundation Course &nbsp;&middot;&nbsp; Industry Research</div>
+    <h1 id="appName">Company Research Portal</h1>
+    <p>Identify five companies that hire, or are likely to hire, freshers in your field of study. Each company may be submitted by one student only.</p>
+  </div>
+</header>
 
-    <div class="banner notice">Give correct details. Your entries are final and the full list goes to the HOD. A company that is already taken, or a slightly changed spelling of one, will not be accepted.</div>
-    <div id="banner" class="banner bad" hidden></div>
+<main class="wrap">
+  <section id="formSection">
+    <details class="guide" open>
+      <summary>How to fill this form (please read once)</summary>
+      <div class="guide-body">
+        <div class="terms">
+          <div class="term">
+            <b>Domain</b>
+            <p>The job role or area you would apply for in that company. Example: if you want to join Celebal Technologies as a data engineer, your domain is <em>Data Engineer</em>. Pick it from the list. If your role is not listed, choose <em>Other</em> and type it.</p>
+          </div>
+          <div class="term">
+            <b>Domain-specific link or email</b>
+            <p>Where you can apply for <em>that exact role</em> in that company. Give either a <em>link</em> to the opening or careers page for that role, or the <em>email</em> of the HR or the person who handles hiring for it. Example: the page listing the Data Engineer opening, or the HR email for data roles.</p>
+          </div>
+          <div class="term">
+            <b>General fresher hiring link or email</b>
+            <p>The common way any fresher can apply to that company, whatever the role. Many companies, like TCS, do not hire for one particular role. They visit colleges and ask for freshers with a given skill set. Give the fresher or campus hiring page, or the email where freshers can apply.</p>
+          </div>
+        </div>
+
+        <div class="two">
+          <div class="kind a"><b>Company hires for specific roles</b>Choose your role as the domain. Give the domain-specific link or email. The general fresher link or email is optional, add it if you have it.</div>
+          <div class="kind b"><b>Company hires freshers by skills, not roles</b>Choose <em>General (not domain specific)</em> as the domain. Give only the general fresher hiring link or email.</div>
+        </div>
+
+        <ul class="rules">
+          <li>Give <strong>at least one</strong> of the two link or email fields. You may give both.</li>
+          <li>Copy links and emails from the company's <strong>official</strong> website or careers page. Do not make them up. Make sure the link opens.</li>
+          <li>The company's name and website are checked live. A company that is already taken, or only slightly different in spelling, is not accepted. Watch the dropdown while you type the name.</li>
+          <li>It is <strong>first come, first served</strong>, and you can submit <strong>only once</strong>. Entries are final.</li>
+        </ul>
+      </div>
+    </details>
+
+    <div class="notice"><strong>Please note:</strong> entries are final and these details will be recorded for reference. Provide accurate details only.</div>
+    <div id="banner" class="banner" hidden></div>
 
     <form id="form" autocomplete="off" novalidate>
-      <fieldset>
-        <legend>About you</legend>
-        <div class="field">
-          <label for="name">Full name</label>
-          <input type="text" id="name" maxlength="60" data-k="name">
-          <div class="msg" data-m="name"></div>
+      <div class="sec">Step 1 &nbsp;&middot;&nbsp; Your details</div>
+      <div class="card">
+        <h2><span class="num">&#10003;</span> Student information</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="name">Full name</label>
+            <input type="text" id="name" maxlength="60" data-k="name" placeholder="As on your college ID">
+            <div class="msg" data-m="name"></div>
+          </div>
+          <div class="field">
+            <label for="roll">RTU roll number</label>
+            <input type="text" id="roll" maxlength="24" data-k="roll" placeholder="Your university roll number">
+            <div class="msg" data-m="roll"></div>
+          </div>
         </div>
-        <div class="field">
-          <label for="roll">Roll number</label>
-          <input type="text" id="roll" maxlength="24" data-k="roll">
-          <div class="msg" data-m="roll"></div>
-        </div>
-      </fieldset>
+      </div>
 
+      <div class="sec">Step 2 &nbsp;&middot;&nbsp; Your five companies</div>
       <div id="companies"></div>
 
       <div class="hp" aria-hidden="true"><label>Leave empty <input type="text" id="hp" tabindex="-1" autocomplete="off"></label></div>
-
-      <button type="submit" id="submit" disabled>Submit</button>
-      <div class="hint" id="why" style="text-align:center;margin-top:8px"></div>
     </form>
   </section>
 
-  <section id="doneSection" class="done" hidden>
-    <h2>Submitted</h2>
-    <div>Thank you. Your companies are saved and cannot be changed.</div>
-    <ol id="doneList"></ol>
+  <section id="doneSection" hidden>
+    <div class="done-card">
+      <h2>Submitted. Thank you!</h2>
+      <div>Your entries are saved and cannot be changed. You can close this page.</div>
+      <div style="overflow-x:auto"><table class="sum" id="doneTable"></table></div>
+    </div>
   </section>
 </main>
+
+<div class="bar" id="bar">
+  <div class="wrap">
+    <div class="prog">
+      <div class="txt" id="progTxt">0 of 5 companies complete</div>
+      <div class="track"><div class="fill" id="fill"></div></div>
+      <div class="why" id="why"></div>
+    </div>
+    <button type="submit" class="go" id="submit" form="form" disabled>Submit</button>
+  </div>
+</div>
 
 <script>
 (function () {
   var COUNT = 5;
   var $ = function (s, r) { return (r || document).querySelector(s); };
+  var inputs = {}, state = {}, keys = [];
 
-  // ---- build the 5 company blocks ----
-  var box = $('#companies');
-  for (var i = 0; i < COUNT; i++) {
-    var fs = document.createElement('fieldset');
-    fs.innerHTML =
-      '<legend>Company ' + (i + 1) + '</legend>' +
-      '<div class="field"><label>Company name</label>' +
-      '<input type="text" maxlength="80" data-k="cname' + i + '" data-suggest="1">' +
-      '<div class="drop"></div><div class="msg" data-m="cname' + i + '"></div></div>' +
-      '<div class="field"><label>Company website</label>' +
-      '<input type="text" maxlength="120" placeholder="example: wipro.com" data-k="csite' + i + '">' +
-      '<div class="msg" data-m="csite' + i + '"></div>' +
-      '<div class="hint">The company\'s own website. amazon.in and amazon.com count as the same company.</div></div>';
-    box.appendChild(fs);
+  fetch('/api/config').then(function (r) { return r.json(); }).then(build).catch(function () {
+    $('#banner').textContent = 'Could not load the form. Check your internet and refresh the page.';
+    $('#banner').hidden = false;
+  });
+
+  function build(cfg) {
+    document.title = cfg.appName; $('#appName').textContent = cfg.appName;
+
+    var options = '<option value="">Choose a domain...</option>';
+    cfg.groups.forEach(function (g) {
+      options += '<optgroup label="' + g.group + '">' + g.items.map(function (d) { return '<option>' + d + '</option>'; }).join('') + '</optgroup>';
+    });
+    options += '<optgroup label="Not listed / not role based">' +
+      '<option value="__general__">' + cfg.general + '</option><option value="__other__">Other (type your own)</option></optgroup>';
+
+    var box = $('#companies');
+    for (var i = 0; i < COUNT; i++) {
+      var card = document.createElement('div');
+      card.className = 'card'; card.id = 'card' + i;
+      card.innerHTML =
+        '<h2><span class="num">' + (i + 1) + '</span> Company ' + (i + 1) + '<span class="badge" id="badge' + i + '">Incomplete</span></h2>' +
+        '<div class="grid">' +
+          '<div class="field"><label>Company name</label>' +
+            '<input type="text" maxlength="80" data-k="cname' + i + '" data-suggest="1" placeholder="e.g. Celebal Technologies">' +
+            '<div class="drop"></div><div class="msg" data-m="cname' + i + '"></div></div>' +
+          '<div class="field"><label>Company website <small>(official)</small></label>' +
+            '<input type="text" maxlength="120" data-k="csite' + i + '" placeholder="e.g. celebaltech.com">' +
+            '<div class="msg" data-m="csite' + i + '"></div></div>' +
+          '<div class="field"><label>Domain <small>(the role you would apply for)</small></label>' +
+            '<select data-k="cdom' + i + '">' + options + '</select>' +
+            '<div class="msg" data-m="cdom' + i + '"></div></div>' +
+          '<div class="field" id="otherwrap' + i + '" hidden><label>Type your domain</label>' +
+            '<input type="text" maxlength="60" data-k="cother' + i + '" placeholder="e.g. Site Reliability Engineer">' +
+            '<div class="msg" data-m="cother' + i + '"></div></div>' +
+          '<div class="field full"><label>Domain-specific link or email <small id="dlreq' + i + '">(link to the opening for this role, or HR email)</small></label>' +
+            '<input type="text" maxlength="300" data-k="cdl' + i + '" placeholder="https://company.com/careers/data-engineer   or   hr@company.com">' +
+            '<div class="msg" data-m="cdl' + i + '"></div></div>' +
+          '<div class="field full"><label>General fresher hiring link or email <small id="glreq' + i + '">(optional if you gave the field above)</small></label>' +
+            '<input type="text" maxlength="300" data-k="cgl' + i + '" placeholder="https://company.com/careers/freshers   or   freshers@company.com">' +
+            '<div class="msg" data-m="cgl' + i + '"></div></div>' +
+        '</div>';
+      box.appendChild(card);
+    }
+
+    document.querySelectorAll('[data-k]').forEach(function (el) { inputs[el.dataset.k] = el; });
+    keys = Object.keys(inputs);
+    keys.forEach(function (k) { state[k] = 'empty'; });
+    wire();
+    syncAll();
+    refresh();
   }
 
-  var inputs = {};
-  document.querySelectorAll('input[data-k]').forEach(function (el) { inputs[el.dataset.k] = el; });
-  var keys = Object.keys(inputs);
+  // ---- helpers ----
+  function isGeneral(i) { return inputs['cdom' + i].value === '__general__'; }
+  function isOther(i) { return inputs['cdom' + i].value === '__other__'; }
 
-  // state per field: 'empty' | 'wait' | 'ok' | 'bad'
-  var state = {};
-  keys.forEach(function (k) { state[k] = 'empty'; });
+  function okText(k) {
+    if (/^c(name|site)/.test(k)) return 'Available';
+    if (/^c(dl|gl)/.test(k)) return 'Looks good';
+    return '';
+  }
 
   function setField(k, st, text) {
     state[k] = st;
@@ -118,42 +171,82 @@
     el.classList.toggle('ok', st === 'ok');
     el.classList.toggle('bad', st === 'bad');
     msg.className = 'msg ' + (st === 'ok' ? 'ok' : st === 'bad' ? 'bad' : st === 'wait' ? 'wait' : '');
-    msg.textContent = st === 'ok' ? 'Available' : st === 'wait' ? 'Checking...' : (text || '');
-    if (k === 'name' || k === 'roll') { if (st === 'ok') msg.textContent = ''; }
-    refreshSubmit();
+    msg.textContent = st === 'ok' ? okText(k) : st === 'wait' ? 'Checking...' : st === 'bad' ? (text || '') : '';
   }
+
+  // Show or hide the fields that depend on the chosen domain.
+  function syncCompany(i) {
+    var other = isOther(i), general = isGeneral(i);
+    $('#otherwrap' + i).hidden = !other;
+    if (!other) { inputs['cother' + i].value = ''; state['cother' + i] = 'na'; }
+    else if (state['cother' + i] === 'na') state['cother' + i] = 'empty';
+
+    var dl = inputs['cdl' + i];
+    dl.disabled = general;
+    if (general) {
+      dl.value = ''; dl.placeholder = 'Not needed. You chose General.'; state['cdl' + i] = 'na';
+      setField('cdl' + i, 'empty', ''); state['cdl' + i] = 'na';
+    } else {
+      dl.placeholder = 'https://company.com/careers/data-engineer   or   hr@company.com';
+      if (state['cdl' + i] === 'na') state['cdl' + i] = 'empty';
+    }
+    $('#glreq' + i).textContent = general ? '(required for General companies)' : '(optional if you gave the field above)';
+    $('#dlreq' + i).textContent = general ? '' : '(link to the opening for this role, or HR email)';
+  }
+  function syncAll() { for (var i = 0; i < COUNT; i++) syncCompany(i); }
 
   function snapshot() {
     var companies = [];
     for (var i = 0; i < COUNT; i++) {
-      companies.push({ name: inputs['cname' + i].value, website: inputs['csite' + i].value });
+      companies.push({
+        name: inputs['cname' + i].value, website: inputs['csite' + i].value,
+        domain: inputs['cdom' + i].value, domainOther: inputs['cother' + i].value,
+        domainLink: inputs['cdl' + i].value, generalLink: inputs['cgl' + i].value,
+      });
     }
     return { name: inputs.name.value, roll: inputs.roll.value, companies: companies, hp: $('#hp').value };
   }
 
-  function refreshSubmit() {
-    var all = keys.every(function (k) { return state[k] === 'ok'; });
-    $('#submit').disabled = !all;
-    var why = '';
-    if (!all) {
-      var waiting = keys.some(function (k) { return state[k] === 'wait'; });
-      var bad = keys.some(function (k) { return state[k] === 'bad'; });
-      var empty = keys.some(function (k) { return state[k] === 'empty'; });
-      why = waiting ? 'Checking...' : bad ? 'Fix the highlighted fields to continue.' : empty ? 'Fill every field to continue.' : '';
-    }
-    $('#why').textContent = why;
+  function companyReady(i) {
+    var s = function (k) { return state[k + i]; };
+    if (s('cname') !== 'ok' || s('csite') !== 'ok' || s('cdom') !== 'ok') return false;
+    if (isOther(i) && s('cother') !== 'ok') return false;
+    var dl = s('cdl'), gl = s('cgl');
+    if (isGeneral(i)) return gl === 'ok';
+    if (dl === 'bad' || gl === 'bad' || dl === 'wait' || gl === 'wait') return false;
+    return dl === 'ok' || gl === 'ok';
   }
 
-  // ---- live checking of the whole form ----
+  function refresh() {
+    var done = 0;
+    for (var i = 0; i < COUNT; i++) {
+      var r = companyReady(i);
+      if (r) done++;
+      var b = $('#badge' + i); b.textContent = r ? 'Complete' : 'Incomplete'; b.classList.toggle('done', r);
+    }
+    var you = state.name === 'ok' && state.roll === 'ok';
+    var anyWait = keys.some(function (k) { return state[k] === 'wait'; });
+    var anyBad = keys.some(function (k) { return state[k] === 'bad'; });
+    $('#progTxt').textContent = done + ' of ' + COUNT + ' companies complete' + (you ? '' : '  -  your details pending');
+    $('#fill').style.width = ((done + (you ? 1 : 0)) / (COUNT + 1) * 100) + '%';
+    var all = you && done === COUNT;
+    $('#submit').disabled = !all;
+    $('#why').textContent = all ? 'Ready to submit.' : anyWait ? 'Checking...' : anyBad ? 'Fix the red messages to continue.' : 'Fill in every required field to continue.';
+  }
+
+  // ---- live checking ----
   var seq = 0, timer = null;
   function schedule(delay) {
     clearTimeout(timer);
     var snap = snapshot();
     keys.forEach(function (k) {
-      if (!inputs[k].value.trim()) setField(k, 'empty', '');
-      else setField(k, 'wait', '');
+      if (state[k] === 'na') return;
+      var el = inputs[k];
+      if (el.tagName === 'SELECT') { setField(k, el.value ? 'ok' : 'empty', ''); return; }
+      if (!el.value.trim()) setField(k, 'empty', ''); else setField(k, 'wait', '');
     });
-    if (keys.every(function (k) { return state[k] === 'empty'; })) return;
+    refresh();
+    if (keys.every(function (k) { return state[k] === 'empty' || state[k] === 'na'; })) return;
     timer = setTimeout(function () { runCheck(snap); }, delay);
   }
 
@@ -161,72 +254,84 @@
     var mine = ++seq;
     fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) })
       .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (mine !== seq || !data.student) return;
-        applyResult(data, snap);
-      })
+      .then(function (data) { if (mine === seq && data.student) { applyResult(data, snap); refresh(); } })
       .catch(function () {
         if (mine !== seq) return;
         keys.forEach(function (k) { if (state[k] === 'wait') setField(k, 'bad', 'Could not check. Check your internet and try again.'); });
+        refresh();
       });
   }
 
   function applyResult(data, snap) {
     function apply(k, value, error) {
-      if (!value.trim()) return setField(k, 'empty', '');
+      if (state[k] === 'na') return;
+      if (!String(value).trim()) return setField(k, 'empty', '');
       if (inputs[k].value !== value) return; // changed again while checking
       if (error) setField(k, 'bad', error); else setField(k, 'ok', '');
     }
     apply('name', snap.name, data.student.name);
     apply('roll', snap.roll, data.student.roll);
     for (var i = 0; i < COUNT; i++) {
-      apply('cname' + i, snap.companies[i].name, data.companies[i].name);
-      apply('csite' + i, snap.companies[i].website, data.companies[i].website);
+      var c = snap.companies[i], e = data.companies[i];
+      apply('cname' + i, c.name, e.name);
+      apply('csite' + i, c.website, e.website);
+      apply('cother' + i, c.domainOther, e.other);
+      apply('cdl' + i, c.domainLink, e.dlink);
+      apply('cgl' + i, c.generalLink, e.glink);
+      // The domain dropdown and the "at least one link" rule are only judged on submit.
+      if (e.domain) setField('cdom' + i, 'bad', e.domain);
+      if (e.dlink && !c.domainLink.trim() && !isGeneral(i)) setField('cdl' + i, 'bad', e.dlink);
     }
   }
 
-  keys.forEach(function (k) {
-    inputs[k].addEventListener('input', function () { schedule(450); });
-    inputs[k].addEventListener('blur', function () { if (state[k] === 'wait') schedule(0); });
-  });
+  function wire() {
+    keys.forEach(function (k) {
+      var el = inputs[k];
+      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', function () {
+        var m = /^cdom(\d)$/.exec(k);
+        if (m) syncCompany(Number(m[1]));
+        schedule(m ? 0 : 450);
+      });
+      el.addEventListener('blur', function () { if (state[k] === 'wait') schedule(0); });
+    });
 
-  // ---- typeahead of taken companies ----
-  var suggestSeq = 0, suggestTimer = null;
-  document.querySelectorAll('input[data-suggest]').forEach(function (el) {
-    var drop = el.parentNode.querySelector('.drop');
-    el.addEventListener('input', function () {
-      clearTimeout(suggestTimer);
-      var q = el.value.trim();
-      if (q.replace(/[^a-z0-9]/gi, '').length < 2) { drop.classList.remove('show'); return; }
-      suggestTimer = setTimeout(function () {
-        var mine = ++suggestSeq;
-        fetch('/api/suggest?q=' + encodeURIComponent(q))
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
+    // Dropdown of companies that are already taken.
+    var suggestSeq = 0, suggestTimer = null;
+    document.querySelectorAll('input[data-suggest]').forEach(function (el) {
+      var drop = el.parentNode.querySelector('.drop');
+      el.addEventListener('input', function () {
+        clearTimeout(suggestTimer);
+        var q = el.value.trim();
+        if (q.replace(/[^a-z0-9]/gi, '').length < 2) { drop.classList.remove('show'); return; }
+        suggestTimer = setTimeout(function () {
+          var mine = ++suggestSeq;
+          fetch('/api/suggest?q=' + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (data) {
             if (mine !== suggestSeq) return;
             drop.textContent = '';
             if (!data.taken.length) { drop.classList.remove('show'); return; }
-            var head = document.createElement('div');
-            head.className = 'title'; head.textContent = 'Already taken by other students';
+            var head = document.createElement('div'); head.className = 'title'; head.textContent = 'Already taken by other students';
             drop.appendChild(head);
             data.taken.forEach(function (name) {
               var row = document.createElement('div');
               var b = document.createElement('b'); b.textContent = name;
               var tag = document.createElement('i'); tag.textContent = 'Already taken';
-              row.appendChild(b); row.appendChild(tag);
-              drop.appendChild(row);
+              row.appendChild(b); row.appendChild(tag); drop.appendChild(row);
             });
             drop.classList.add('show');
-          })
-          .catch(function () {});
-      }, 250);
+          }).catch(function () {});
+        }, 250);
+      });
+      el.addEventListener('blur', function () { setTimeout(function () { drop.classList.remove('show'); }, 150); });
+      el.addEventListener('keydown', function (e) { if (e.key === 'Escape') drop.classList.remove('show'); });
     });
-    el.addEventListener('blur', function () { setTimeout(function () { drop.classList.remove('show'); }, 150); });
-    el.addEventListener('keydown', function (e) { if (e.key === 'Escape') drop.classList.remove('show'); });
-  });
+
+    $('#form').addEventListener('submit', onSubmit);
+  }
 
   // ---- submit ----
-  $('#form').addEventListener('submit', function (e) {
+  function banner(text) { var b = $('#banner'); b.textContent = text; b.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+  function onSubmit(e) {
     e.preventDefault();
     var btn = $('#submit');
     if (btn.disabled) return;
@@ -234,41 +339,34 @@
     $('#banner').hidden = true;
     var snap = snapshot();
     fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) })
-      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
-      .then(function (res) {
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
         btn.textContent = 'Submit';
-        if (res.data.ok) return showDone(snap);
-        if (res.data.student) {
-          applyResult(res.data, snap);
-        }
-        var banner = $('#banner');
-        banner.textContent = res.data.message || 'Some entries need to be changed. See the red messages below.';
-        banner.hidden = false;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        refreshSubmit();
+        if (data.ok) return showDone(snap);
+        if (data.student) applyResult(data, snap);
+        banner(data.message || 'Some entries need to be changed. See the red messages below.');
+        refresh();
       })
       .catch(function () {
         btn.textContent = 'Submit';
-        var banner = $('#banner');
-        banner.textContent = 'Could not reach the server. Check your internet and press Submit again.';
-        banner.hidden = false;
-        refreshSubmit();
+        banner('Could not reach the server. Check your internet and press Submit again.');
+        refresh();
       });
-  });
+  }
 
   function showDone(snap) {
-    $('#formSection').hidden = true;
-    var list = $('#doneList');
+    $('#formSection').hidden = true; $('#bar').hidden = true;
+    var t = $('#doneTable');
+    t.innerHTML = '<tr><th>Company</th><th>Website</th><th>Domain</th></tr>';
     snap.companies.forEach(function (c) {
-      var li = document.createElement('li');
-      li.textContent = c.name.trim() + ' (' + c.website.trim() + ')';
-      list.appendChild(li);
+      var tr = document.createElement('tr');
+      var dom = c.domain === '__general__' ? 'General' : c.domain === '__other__' ? c.domainOther : c.domain;
+      [c.name, c.website, dom].forEach(function (v) { var td = document.createElement('td'); td.textContent = v.trim(); tr.appendChild(td); });
+      t.appendChild(tr);
     });
     $('#doneSection').hidden = false;
     window.scrollTo(0, 0);
   }
-
-  refreshSubmit();
 })();
 </script>
 </body>
