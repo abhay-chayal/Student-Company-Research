@@ -32,6 +32,9 @@
   td.student small { display:block; color:var(--muted); font-weight:400; font-size:.75rem; }
   td a { color:var(--navy2); }
   td.na { color:#b3ab9a; }
+  td.nw { white-space:nowrap; }
+  td.act { white-space:nowrap; width:1%; text-align:right; }
+  button.danger { white-space:nowrap; }
   h2.sub { font-size:1.05rem; color:var(--navy); margin:28px 0 8px; }
   ul.plainlist { margin:0; padding-left:20px; color:var(--muted); }
 </style>
@@ -124,13 +127,14 @@
           when.textContent = ci === 0 ? new Date(s.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '';
           name.appendChild(when);
           tr.appendChild(name);
-          tr.appendChild(td(s.roll_no));
+          tr.appendChild(td(s.roll_no, 'nw'));
           tr.appendChild(td(c.name));
           tr.appendChild(td(c.website));
           tr.appendChild(td(c.domain || '-'));
           tr.appendChild(linkCell(c.domain_link));
           tr.appendChild(linkCell(c.general_link));
           var act = document.createElement('td');
+          act.className = 'act';
           if (ci === 0) {
             var del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete';
             del.onclick = function () {
