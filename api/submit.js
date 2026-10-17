@@ -19,8 +19,8 @@ module.exports = async (req, res) => {
       return send(res, 400, { ok: false, student: result.student, companies: result.companies });
     }
 
-    const { rollNo, rollKey, name, companies } = result.clean;
-    const outcome = await getDb().submit({ rollNo, rollKey, name, companies });
+    const { rollNo, rollKey, name, email, companies } = result.clean;
+    const outcome = await getDb().submit({ rollNo, rollKey, name, email, companies });
 
     if (outcome.ok) return send(res, 200, { ok: true });
     if (outcome.roll) {

@@ -41,8 +41,8 @@ function csvCell(value) {
 }
 
 const HEADER = [
-  'S.No', 'Student Name', 'RTU Roll No', 'Company', 'Website', 'Domain',
-  'Domain-specific Link / Email', 'General Fresher Hiring Link / Email',
+  'S.No', 'Student Name', 'RTU Roll No', 'Email ID', 'Company', 'Website', 'Domain',
+  'Domain-specific Link / Email', 'Fresher Hiring Link / Email',
 ];
 
 /** One row per company. The student columns repeat on all of a student's rows (no merged cells). */
@@ -52,7 +52,7 @@ function companyRows(students) {
     s.companies.forEach((c) => {
       rows.push({
         student: idx,
-        cells: [idx + 1, s.name, s.roll_no, c.name, c.website, c.domain || '', c.domain_link || '', c.general_link || ''],
+        cells: [idx + 1, s.name, s.roll_no, s.email || '', c.name, c.website, c.domain || '', c.domain_link || '', c.general_link || ''],
       });
     });
   });
@@ -77,8 +77,10 @@ module.exports = async (req, res) => {
       return send(res, 200, {
         count: students.length,
         companyCount: students.reduce((n, s) => n + s.companies.length, 0),
+        reservedCount: await db.reservedCount(),
         students: students.map((s) => ({
           roll_no: s.roll_no,
+          email: s.email || '',
           name: s.name,
           created_at: s.created_at,
           companies: s.companies.map((c) => ({
@@ -117,7 +119,7 @@ module.exports = async (req, res) => {
 
       // Sheet 1: one row per company, student columns repeated.
       const sheet = book.addWorksheet('Student Research', { views: [{ state: 'frozen', ySplit: 1 }] });
-      sheet.columns = [8, 24, 18, 28, 26, 26, 42, 42].map((width) => ({ width }));
+      sheet.columns = [8, 24, 18, 30, 28, 26, 26, 42, 42].map((width) => ({ width }));
       const head = sheet.addRow(HEADER);
       head.height = 30;
       head.eachCell((cell) => {
@@ -132,7 +134,7 @@ module.exports = async (req, res) => {
           cell.border = border;
           cell.alignment = { vertical: 'top', wrapText: true };
           if (r.student % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAF4E6' } };
-          if (col === 7 || col === 8) {
+          if (col === 4 || col === 8 || col === 9) {
             const raw = r.cells[col - 1];
             const link = hyperlinkFor(raw);
             if (link) {
@@ -142,7 +144,7 @@ module.exports = async (req, res) => {
           }
         });
       });
-      sheet.autoFilter = { from: 'A1', to: 'H1' };
+      sheet.autoFilter = { from: 'A1', to: 'I1' };
 
       // Sheet 2: every company A to Z, handy for checking nothing repeats.
       const flat = book.addWorksheet('All companies A-Z', { views: [{ state: 'frozen', ySplit: 1 }] });

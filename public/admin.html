@@ -23,7 +23,7 @@
   .stat b { font:700 1.35rem Georgia,serif; color:var(--navy); margin-right:6px; }
   .err { color:var(--bad); font-size:.9rem; }
   .scroll { overflow-x:auto; background:var(--paper); border:1px solid var(--line); border-radius:10px; }
-  table { border-collapse:collapse; width:100%; min-width:1100px; }
+  table { border-collapse:collapse; width:100%; min-width:1250px; }
   th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:.88rem; word-break:break-word; }
   th { background:var(--navy); color:#f7f1e1; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; font-weight:600; white-space:nowrap; }
   tr.first td { border-top:2px solid var(--line2); }
@@ -52,6 +52,7 @@
     <div class="row">
       <div class="stat"><b id="sCount">0</b>students submitted</div>
       <div class="stat"><b id="sCompanies">0</b>companies</div>
+      <div class="stat"><b id="sReserved">0</b>already on the college list</div>
       <button id="dlXlsx">Download Excel</button>
       <button id="dlCsv" class="plain">Download CSV</button>
       <button id="reload" class="plain">Refresh</button>
@@ -60,8 +61,8 @@
     <div class="scroll">
       <table>
         <thead><tr>
-          <th>S.No</th><th>Student Name</th><th>RTU Roll No</th><th>Company</th><th>Website</th><th>Domain</th>
-          <th>Domain-specific Link / Email</th><th>General Fresher Hiring Link / Email</th><th></th>
+          <th>S.No</th><th>Student Name</th><th>RTU Roll No</th><th>Email ID</th><th>Company</th><th>Website</th><th>Domain</th>
+          <th>Domain-specific Link / Email</th><th>Fresher Hiring Link / Email</th><th></th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
@@ -114,6 +115,7 @@
       $('#login').hidden = true; $('#panel').hidden = false;
       $('#sCount').textContent = d.count;
       $('#sCompanies').textContent = d.companyCount;
+      $('#sReserved').textContent = d.reservedCount;
 
       var body = $('#rows'); body.textContent = '';
       d.students.forEach(function (s, si) {
@@ -128,6 +130,7 @@
           name.appendChild(when);
           tr.appendChild(name);
           tr.appendChild(td(s.roll_no, 'nw'));
+          tr.appendChild(linkCell(s.email));
           tr.appendChild(td(c.name));
           tr.appendChild(td(c.website));
           tr.appendChild(td(c.domain || '-'));

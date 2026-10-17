@@ -30,20 +30,20 @@
             <p>Where you can apply for <em>that exact role</em> in that company. Give either a <em>link</em> to the opening or careers page for that role, or the <em>email</em> of the HR or the person who handles hiring for it. Example: the page listing the Data Engineer opening, or the HR email for data roles.</p>
           </div>
           <div class="term">
-            <b>General fresher hiring link or email</b>
+            <b>Fresher hiring link or email</b>
             <p>The common way any fresher can apply to that company, whatever the role. Many companies, like TCS, do not hire for one particular role. They visit colleges and ask for freshers with a given skill set. Give the fresher or campus hiring page, or the email where freshers can apply.</p>
           </div>
         </div>
 
         <div class="two">
-          <div class="kind a"><b>Company hires for specific roles</b>Choose your role as the domain. Give the domain-specific link or email. The general fresher link or email is optional, add it if you have it.</div>
-          <div class="kind b"><b>Company hires freshers by skills, not roles</b>Choose <em>General (not domain specific)</em> as the domain. Give only the general fresher hiring link or email.</div>
+          <div class="kind a"><b>Company hires for specific roles</b>Choose your role as the domain. Give the domain-specific link or email. The fresher hiring link or email is optional, add it if you have it.</div>
+          <div class="kind b"><b>Company hires freshers by skills, not roles</b>Choose <em>General (not domain specific)</em> as the domain. Give only the fresher hiring link or email.</div>
         </div>
 
         <ul class="rules">
           <li>Give <strong>at least one</strong> of the two link or email fields. You may give both.</li>
           <li>Copy links and emails from the company's <strong>official</strong> website or careers page. Do not make them up. Make sure the link opens.</li>
-          <li>The company's name and website are checked live. A company that is already taken, or only slightly different in spelling, is not accepted. Watch the dropdown while you type the name.</li>
+          <li>The company's name and website are checked live. A company that is already taken, or only slightly different in spelling, is not accepted. Companies already on the college's existing placement list are also marked as already taken. Watch the dropdown while you type the name.</li>
           <li>It is <strong>first come, first served</strong>, and you can submit <strong>only once</strong>. Entries are final.</li>
         </ul>
       </div>
@@ -66,6 +66,11 @@
             <label for="roll">RTU roll number</label>
             <input type="text" id="roll" maxlength="24" data-k="roll" placeholder="Your university roll number">
             <div class="msg" data-m="roll"></div>
+          </div>
+          <div class="field full">
+            <label for="email">Email ID</label>
+            <input type="text" id="email" maxlength="120" data-k="email" placeholder="Your email address" inputmode="email" autocapitalize="off">
+            <div class="msg" data-m="email"></div>
           </div>
         </div>
       </div>
@@ -140,7 +145,7 @@
           '<div class="field full"><label>Domain-specific link or email <small id="dlreq' + i + '">(link to the opening for this role, or HR email)</small></label>' +
             '<input type="text" maxlength="300" data-k="cdl' + i + '" placeholder="https://company.com/careers/data-engineer   or   hr@company.com">' +
             '<div class="msg" data-m="cdl' + i + '"></div></div>' +
-          '<div class="field full"><label>General fresher hiring link or email <small id="glreq' + i + '">(optional if you gave the field above)</small></label>' +
+          '<div class="field full"><label>Fresher hiring link or email <small id="glreq' + i + '">(optional if you gave the field above)</small></label>' +
             '<input type="text" maxlength="300" data-k="cgl' + i + '" placeholder="https://company.com/careers/freshers   or   freshers@company.com">' +
             '<div class="msg" data-m="cgl' + i + '"></div></div>' +
         '</div>';
@@ -204,7 +209,7 @@
         domainLink: inputs['cdl' + i].value, generalLink: inputs['cgl' + i].value,
       });
     }
-    return { name: inputs.name.value, roll: inputs.roll.value, companies: companies, hp: $('#hp').value };
+    return { name: inputs.name.value, roll: inputs.roll.value, email: inputs.email.value, companies: companies, hp: $('#hp').value };
   }
 
   function companyReady(i) {
@@ -224,7 +229,7 @@
       if (r) done++;
       var b = $('#badge' + i); b.textContent = r ? 'Complete' : 'Incomplete'; b.classList.toggle('done', r);
     }
-    var you = state.name === 'ok' && state.roll === 'ok';
+    var you = state.name === 'ok' && state.roll === 'ok' && state.email === 'ok';
     var anyWait = keys.some(function (k) { return state[k] === 'wait'; });
     var anyBad = keys.some(function (k) { return state[k] === 'bad'; });
     $('#progTxt').textContent = done + ' of ' + COUNT + ' companies complete' + (you ? '' : '  -  your details pending');
@@ -271,6 +276,7 @@
     }
     apply('name', snap.name, data.student.name);
     apply('roll', snap.roll, data.student.roll);
+    apply('email', snap.email, data.student.email);
     for (var i = 0; i < COUNT; i++) {
       var c = snap.companies[i], e = data.companies[i];
       apply('cname' + i, c.name, e.name);
@@ -309,7 +315,7 @@
             if (mine !== suggestSeq) return;
             drop.textContent = '';
             if (!data.taken.length) { drop.classList.remove('show'); return; }
-            var head = document.createElement('div'); head.className = 'title'; head.textContent = 'Already taken by other students';
+            var head = document.createElement('div'); head.className = 'title'; head.textContent = 'Already taken';
             drop.appendChild(head);
             data.taken.forEach(function (name) {
               var row = document.createElement('div');

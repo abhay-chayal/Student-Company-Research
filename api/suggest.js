@@ -12,7 +12,9 @@ module.exports = async (req, res) => {
     if (q.length < 2) return send(res, 200, { taken: [] });
     const rows = await getDb().suggest(q);
     rows.sort((a, b) => Number(b.prefix) - Number(a.prefix) || a.name.localeCompare(b.name));
-    send(res, 200, { taken: rows.slice(0, 8).map((r) => r.name) });
+    // Several spellings can belong to one company, so show each company once.
+    const names = [...new Map(rows.map((r) => [r.name.toLowerCase(), r.name])).values()];
+    send(res, 200, { taken: names.slice(0, 8) });
   } catch (err) {
     console.error(err);
     send(res, 200, { taken: [] });

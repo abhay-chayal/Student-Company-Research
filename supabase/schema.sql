@@ -26,16 +26,29 @@ alter table companies add column if not exists domain        text not null defau
 alter table companies add column if not exists domain_link   text not null default '';
 alter table companies add column if not exists general_link  text not null default '';
 
+alter table students add column if not exists email text not null default '';
+
+-- Companies that are already taken before any student starts (the college's existing list).
+create table if not exists reserved_companies (
+  id        bigserial primary key,
+  name      text not null,
+  name_key  text not null unique
+);
+
 -- Only the server (service role key) may touch the tables. No public access.
 alter table students  enable row level security;
 alter table companies enable row level security;
+alter table reserved_companies enable row level security;
 
 -- One atomic, all-or-nothing submission. Runs one student at a time, so two
 -- students submitting the same company at the same instant cannot both win.
+drop function if exists submit_entry(text, text, text, jsonb);
+
 create or replace function submit_entry(
   p_roll_no   text,
   p_roll_key  text,
   p_name      text,
+  p_email     text,
   p_companies jsonb
 ) returns jsonb
 language plpgsql
@@ -61,6 +74,10 @@ begin
 
     select name into v_taken from companies
      where name_key = v_item->>'name_key' or domain_key = v_item->>'name_key' limit 1;
+    if not found then
+      select name into v_taken from reserved_companies
+       where name_key = v_item->>'name_key' limit 1;
+    end if;
     if found then
       v_conflicts := v_conflicts || jsonb_build_array(
         jsonb_build_object('position', v_pos, 'field', 'name', 'taken', v_taken));
@@ -68,6 +85,10 @@ begin
 
     select name into v_taken from companies
      where domain_key = v_item->>'domain_key' or name_key = v_item->>'domain_key' limit 1;
+    if not found then
+      select name into v_taken from reserved_companies
+       where name_key = v_item->>'domain_key' limit 1;
+    end if;
     if found then
       v_conflicts := v_conflicts || jsonb_build_array(
         jsonb_build_object('position', v_pos, 'field', 'website', 'taken', v_taken));
@@ -79,8 +100,8 @@ begin
   end if;
 
   begin
-    insert into students (roll_key, roll_no, name)
-    values (p_roll_key, p_roll_no, p_name)
+    insert into students (roll_key, roll_no, name, email)
+    values (p_roll_key, p_roll_no, p_name, p_email)
     returning id into v_student_id;
 
     v_pos := 0;
@@ -102,5 +123,5 @@ begin
 end;
 $$;
 
-revoke all on function submit_entry(text, text, text, jsonb) from public, anon, authenticated;
-grant execute on function submit_entry(text, text, text, jsonb) to service_role;
+revoke all on function submit_entry(text, text, text, text, jsonb) from public, anon, authenticated;
+grant execute on function submit_entry(text, text, text, text, jsonb) to service_role;
