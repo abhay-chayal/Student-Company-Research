@@ -1,8 +1,18 @@
 {
   "functions": {
-    "api/*.js": { "maxDuration": 15 }
+    "api/*.js": {
+      "maxDuration": 15
+    }
   },
   "rewrites": [
-    { "source": "/admin", "destination": "/admin.html" }
-  ]
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
+    },
+    {
+      "source": "/fix",
+      "destination": "/fix.html"
+    }
+  ],
+  "installCommand": "npm install --omit=dev"
 }

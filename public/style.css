@@ -21,7 +21,7 @@ main.wrap { padding-top:28px; padding-bottom:150px; }
 .sec::after { content:""; flex:1; height:1px; background:var(--line2); }
 
 .card { background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:20px 22px 10px; margin-bottom:16px; }
-.card h2 { margin:0 0 16px; font-size:1.12rem; font-weight:700; display:flex; align-items:center; gap:12px; color:var(--navy); }
+.card h2 { margin:0 0 16px; font-size:1.12rem; font-weight:700; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; color:var(--navy); overflow-wrap:anywhere; }
 .num { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%; border:1.5px solid var(--navy); color:var(--navy); font:700 .85rem "Segoe UI",system-ui,sans-serif; flex:none; }
 .badge { margin-left:auto; font:600 .7rem "Segoe UI",system-ui,sans-serif; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; border-radius:99px; background:var(--tint); color:var(--muted); border:1px solid var(--line); }
 .badge.done { background:var(--okbg); color:var(--ok); border-color:#c6dcc0; }

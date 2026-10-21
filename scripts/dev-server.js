@@ -14,6 +14,7 @@ const routes = {
   '/api/suggest': require('../api/suggest'),
   '/api/config': require('../api/config'),
   '/api/submit': require('../api/submit'),
+  '/api/fix': require('../api/fix'),
   '/api/admin': require('../api/admin'),
 };
 
@@ -33,6 +34,7 @@ http.createServer((req, res) => {
   }
   let file = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
   if (file === '/admin') file = '/admin.html';
+  if (file === '/fix') file = '/fix.html';
   const full = path.join(ROOT, 'public', path.normalize(file));
   if (!full.startsWith(path.join(ROOT, 'public')) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
     res.statusCode = 404;
@@ -42,4 +44,5 @@ http.createServer((req, res) => {
   fs.createReadStream(full).pipe(res);
 }).listen(PORT, () => {
   console.log('Running at http://localhost:' + PORT + '  (admin: /admin)');
+  if (process.env.DEV_SEED) require('./dev-seed').seed().catch((e) => console.error(e.message));
 });

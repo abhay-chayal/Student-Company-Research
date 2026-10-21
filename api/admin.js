@@ -42,8 +42,20 @@ function csvCell(value) {
 
 const HEADER = [
   'S.No', 'Student Name', 'RTU Roll No', 'Email ID', 'Company', 'Website', 'Domain',
-  'Domain-specific Link / Email', 'Fresher Hiring Link / Email',
+  'Domain-specific Link / Email', 'Fresher Hiring Link / Email', 'Review',
 ];
+
+const REVIEW_LABEL = { new: 'Not reviewed', accepted: 'Accepted', to_fix: 'To fix', pending: 'Pending decision', resubmitted: 'Corrected, to re-check' };
+const REVIEW_STATUSES = new Set(Object.keys(REVIEW_LABEL));
+// Accepts both the database words and the labels used in the review workbook.
+function reviewStatus(word) {
+  const w = String(word || '').trim().toLowerCase();
+  if (REVIEW_STATUSES.has(w)) return w;
+  if (w === 'accepted') return 'accepted';
+  if (w === 'to redo' || w === 'to fix') return 'to_fix';
+  if (w.startsWith('pending')) return 'pending';
+  return null;
+}
 
 /** One row per company. The student columns repeat on all of a student's rows (no merged cells). */
 function companyRows(students) {
@@ -52,7 +64,7 @@ function companyRows(students) {
     s.companies.forEach((c) => {
       rows.push({
         student: idx,
-        cells: [idx + 1, s.name, s.roll_no, s.email || '', c.name, c.website, c.domain || '', c.domain_link || '', c.general_link || ''],
+        cells: [idx + 1, s.name, s.roll_no, s.email || '', c.name, c.website, c.domain || '', c.domain_link || '', c.general_link || '', REVIEW_LABEL[c.review_status] || REVIEW_LABEL.new],
       });
     });
   });
@@ -89,10 +101,46 @@ module.exports = async (req, res) => {
             domain: c.domain,
             domain_link: c.domain_link,
             general_link: c.general_link,
+            review_status: c.review_status || 'new',
+            review_note: c.review_note || '',
           })),
         })),
         similar: similarPairs(students),
       });
+    }
+
+    // Load the review results (accepted / to fix / pending) into the database.
+    if (action === 'review' && req.method === 'POST') {
+      const { items } = readBody(req);
+      if (!Array.isArray(items) || items.length === 0 || items.length > 6000) return send(res, 400, { ok: false, message: 'Send between 1 and 6000 results.' });
+      const clean = [];
+      for (const it of items) {
+        const status = reviewStatus(it.status);
+        const roll = String(it.roll || '').toUpperCase().replace(/[\s\-_/.]/g, '');
+        const key = String(it.name_key || '');
+        if (status && roll && key) clean.push({ roll, name_key: key, status, reason: String(it.reason || '').slice(0, 300) });
+      }
+      const updated = await db.applyReview(clean);
+      return send(res, 200, { ok: true, received: items.length, valid: clean.length, updated });
+    }
+
+    // Every earlier version of a company changed on the fix page (newest first), and restoring one.
+    if (action === 'history') {
+      const roll = String((req.query && req.query.roll) || '').toUpperCase().replace(/[\s\-_/.]/g, '');
+      const rows = await db.listHistory(roll || null);
+      return send(res, 200, { count: rows.length, history: rows.slice(0, 500) });
+    }
+    if (action === 'restore' && req.method === 'POST') {
+      const { id } = readBody(req);
+      if (!Number.isInteger(Number(id)) || Number(id) < 1) return send(res, 400, { ok: false, message: 'Missing history id.' });
+      const outcome = await db.restoreCompany(id);
+      if (outcome.ok) return send(res, 200, { ok: true });
+      if (outcome.code === 'conflict') {
+        const why = outcome.conflicts.map((c) => `the ${c.field} belongs to "${c.taken}"`).join(' and ');
+        return send(res, 409, { ok: false, message: `Cannot restore: ${why}, which is taken now.` });
+      }
+      if (outcome.code === 'missing') return send(res, 404, { ok: false, message: 'That student or company no longer exists.' });
+      return send(res, 409, { ok: false, message: 'Someone just took that name or website. Try again.' });
     }
 
     if (action === 'delete' && req.method === 'POST') {
@@ -119,7 +167,7 @@ module.exports = async (req, res) => {
 
       // Sheet 1: one row per company, student columns repeated.
       const sheet = book.addWorksheet('Student Research', { views: [{ state: 'frozen', ySplit: 1 }] });
-      sheet.columns = [8, 24, 18, 30, 28, 26, 26, 42, 42].map((width) => ({ width }));
+      sheet.columns = [8, 24, 18, 30, 28, 26, 26, 42, 42, 22].map((width) => ({ width }));
       const head = sheet.addRow(HEADER);
       head.height = 30;
       head.eachCell((cell) => {
@@ -144,7 +192,7 @@ module.exports = async (req, res) => {
           }
         });
       });
-      sheet.autoFilter = { from: 'A1', to: 'I1' };
+      sheet.autoFilter = { from: 'A1', to: 'J1' };
 
       // Sheet 2: every company A to Z, handy for checking nothing repeats.
       const flat = book.addWorksheet('All companies A-Z', { views: [{ state: 'frozen', ySplit: 1 }] });

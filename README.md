@@ -32,3 +32,29 @@ Companies already on the college list are marked "already taken" for every stude
   `data/ACEIT-companies-cleaned.xlsx` (check this), `data/reserved-companies.json` and `supabase/seed_reserved.sql`.
 - Every spelling of a company is reserved, so `HCLTech` and `HCL Technologies` are both blocked.
 - To change the list later, edit the sheet, re-run the command, and run the new `seed_reserved.sql` in Supabase.
+
+## Link rules (what the form accepts)
+- The domain-specific job link must point to **one specific job** (or be an email). The company home page, a general careers page, a list or search of jobs, a LinkedIn company page or post, and news/repost sites are refused with a clear message.
+- The fresher hiring field may hold a careers page, a job link or an email. A student may fill either field or both.
+- Every change on the fix page saves the old values to `company_history`. The admin page's "Change history" lists them and can restore one (refused if its name or website has been taken meanwhile; the restore is itself recorded, so it can be undone).
+- On the fix page a company that is not accepted can be corrected or replaced by another company; the old company is released when the new one is saved, under the same uniqueness checks as a new submission.
+- A general careers or campus page is accepted only for a company the student marked **General (not domain specific)**.
+- An HR email is accepted instead of a link.
+- Tracking parameters (`utm_source=chatgpt.com` and similar) are removed; two links pasted together, or a link pasted with brackets, are refused.
+- The link is opened once. A page that is "not found", says the job is closed, or redirects to a general page is refused. Anything unclear (a site that blocks automated visits, a timeout) is let through.
+- The rules live in `lib/linkrules.js` (the address), `lib/linklive.js` (opening the page) and `lib/details.js` (putting them together).
+
+## Reviewing and correcting entries
+1. Download the Excel from the admin page, then review it:
+   `node scripts/review-companies.js <export.xlsx> <folder> --stage=fetch`, then `--stage=render`, `--stage=websites`, `--stage=report`.
+   The first three stages open every link (and, for unclear ones, a real browser: it needs Chrome or Edge installed). `report` writes `company-review.xlsx` and `results.json`.
+   Hand decisions go in `<folder>/overrides.json`. `node scripts/review/make-lists.js <folder>` writes the lists to share.
+2. On the admin page click **Import review results** and choose `results.json`. Each company becomes *accepted* (locked), *to fix*, or *pending*.
+3. Students open **/fix**, enter their roll number and the email they used in the form, and correct only the companies that are not accepted. Their corrections are marked *corrected*; export again and re-review those.
+- Name and website can be changed only when the review found a problem with them. Every change is checked for uniqueness again.
+- Set `FIX_CLOSE_AT` (ISO time) in Vercel to close corrections at a deadline.
+
+## Tests
+    npm test            # 59 checks of the rules, the exports, hostile input and a full-size dataset
+    npm run test:sql    # starts a real PostgreSQL, runs supabase/schema.sql and the seed, and tests
+                        # uniqueness under simultaneous requests, locking, and who can read the data

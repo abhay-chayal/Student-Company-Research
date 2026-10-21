@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fix your companies</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  main.wrap { padding-bottom:60px; }
+  .lead { color:var(--muted); margin:0 0 18px; }
+  .note { font-size:.88rem; background:var(--tint); border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin:0 0 12px; color:var(--ink); }
+  .note.bad { background:var(--badbg); border-color:#efc9c1; color:var(--bad); }
+  .locked { color:var(--ok); font-weight:600; font-size:.92rem; padding-bottom:14px; }
+  button.go { width:auto; height:42px; padding:0 22px; }
+  button.save { margin:4px 0 14px; }
+  .actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .saved { color:var(--ok); font-weight:600; font-size:.9rem; }
+  .badge.fix { background:var(--badbg); color:var(--bad); border-color:#efc9c1; }
+  .badge.wait { background:var(--warnbg); color:var(--warn); border-color:#e7d9ae; }
+  .badge.sent { background:#e6eefb; color:#1f4fa8; border-color:#c9d9f3; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Foundation Course &nbsp;&middot;&nbsp; FEC-28</div>
+    <h1>Fix your companies</h1>
+    <p>Your five companies stay reserved for you. Correct the links, or replace a company with a different one if you prefer.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="loginBox" class="card">
+    <h2>Find your companies</h2>
+    <p class="lead">Enter your roll number and the same email you used in the form.</p>
+    <div class="grid">
+      <div class="field"><label for="roll">RTU roll number</label><input type="text" id="roll" maxlength="24" autocomplete="off"></div>
+      <div class="field"><label for="email">Email ID</label><input type="text" id="email" maxlength="120" autocomplete="off" inputmode="email" autocapitalize="off"></div>
+    </div>
+    <div class="msg bad" id="loginMsg"></div>
+    <div class="hp" aria-hidden="true"><label>Leave empty <input type="text" id="hp" tabindex="-1" autocomplete="off"></label></div>
+    <div class="actions"><button class="go" id="find" type="button">Find my companies</button></div>
+    <div style="height:14px"></div>
+  </section>
+
+  <section id="results" hidden>
+    <p class="note" id="greeting"></p>
+    <div id="cards"></div>
+    <p class="lead"><strong>Link of the specific job or HR email:</strong> the link of one job (not the home page, careers page or a search page), or an email. <strong>Fresher hiring link or email:</strong> a careers page, a job link or an email. You can fill either one or both.</p>
+    <p class="lead">To change a company, type the new company name and its official website. The old company is released once you save.</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var cfg = null, session = { roll: '', email: '' };
+
+  fetch('/api/config').then(function (r) { return r.json(); }).then(function (c) { cfg = c; }).catch(function () {});
+
+  function post(body) {
+    body.roll = session.roll; body.email = session.email; body.hp = $('#hp').value;
+    return fetch('/api/fix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); });
+  }
+
+  $('#find').onclick = function () {
+    $('#loginMsg').textContent = '';
+    session.roll = $('#roll').value; session.email = $('#email').value;
+    post({ action: 'lookup' }).then(function (res) {
+      if (res.status !== 200) { $('#loginMsg').textContent = res.data.error || 'Could not find your companies.'; return; }
+      show(res.data);
+    }).catch(function () { $('#loginMsg').textContent = 'Could not reach the server. Check your internet and try again.'; });
+  };
+  ['roll', 'email'].forEach(function (id) { $('#' + id).addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#find').click(); }); });
+
+  var BADGE = {
+    accepted: ['Accepted', 'done'], to_fix: ['To fix', 'fix'], pending: ['Waiting', 'wait'], resubmitted: ['Corrected', 'sent'], new: ['Open', '']
+  };
+
+  function el(tag, props, parent) { var e = document.createElement(tag); Object.keys(props || {}).forEach(function (k) { e[k] = props[k]; }); if (parent) parent.appendChild(e); return e; }
+
+  function show(data) {
+    $('#loginBox').hidden = true; $('#results').hidden = false;
+    $('#greeting').textContent = 'Hello ' + data.name + '. Companies marked Accepted are locked. Correct the others, or change the company.';
+    var box = $('#cards'); box.textContent = '';
+    data.companies.forEach(function (c) { card(box, c); });
+  }
+
+  function card(box, c) {
+    var st = BADGE[c.review_status] || BADGE.new;
+    var wrap = el('div', { className: 'card' }, box);
+    var h = el('h2', {}, wrap);
+    el('span', { className: 'num', textContent: c.position }, h);
+    h.appendChild(document.createTextNode(' ' + c.name));
+    el('span', { className: 'badge ' + st[1], textContent: st[0] }, h);
+
+    if (c.review_status === 'accepted') { el('div', { className: 'locked', textContent: 'Accepted. Nothing to change.' }, wrap); return; }
+    if (c.review_note) el('div', { className: 'note bad', textContent: c.review_note }, wrap);
+
+    var fields = {}, grid = el('div', { className: 'grid' }, wrap);
+    function field(key, label, parent, full) {
+      var f = el('div', { className: 'field' + (full ? ' full' : '') }, parent || grid);
+      el('label', { textContent: label }, f);
+      var input = el('input', { type: 'text', maxLength: 300 }, f);
+      var msg = el('div', { className: 'msg' }, f);
+      fields[key] = { input: input, msg: msg, wrap: f };
+      return input;
+    }
+    if (c.editable && c.editable.identity) {
+      field('name', 'Company name').value = c.name;
+      field('website', 'Company website (official)').value = c.website;
+    }
+
+    // domain
+    var fDom = el('div', { className: 'field' }, grid);
+    el('label', { textContent: 'Domain (the role you would apply for)' }, fDom);
+    var sel = el('select', {}, fDom);
+    el('option', { value: '', textContent: 'Choose a domain...' }, sel);
+    if (cfg) {
+      cfg.groups.forEach(function (g) { var og = el('optgroup', { label: g.group }, sel); g.items.forEach(function (d) { el('option', { value: d, textContent: d }, og); }); });
+      var og2 = el('optgroup', { label: 'Not listed / not role based' }, sel);
+      el('option', { value: '__general__', textContent: cfg.general }, og2);
+      el('option', { value: '__other__', textContent: 'Other (type your own)' }, og2);
+    }
+    var domMsg = el('div', { className: 'msg' }, fDom);
+    var fOth = el('div', { className: 'field' }, grid); el('label', { textContent: 'Type your domain' }, fOth);
+    var other = el('input', { type: 'text', maxLength: 60 }, fOth); var othMsg = el('div', { className: 'msg' }, fOth);
+    var dl = field('dl', 'Link of the specific job, or HR email', null, true);
+    var gl = field('gl', 'Fresher hiring link or email (optional if you filled the field above)', null, true);
+    dl.value = c.domain_link || ''; gl.value = c.general_link || '';
+    dl.placeholder = 'Link of the specific job, or HR email'; gl.placeholder = 'Careers page, job link or HR email';
+
+    // pre-fill the domain
+    var inList = false;
+    if (cfg) cfg.groups.forEach(function (g) { if (g.items.indexOf(c.domain) !== -1) inList = true; });
+    if (cfg && c.domain === cfg.general) sel.value = '__general__';
+    else if (inList) sel.value = c.domain;
+    else if (c.domain) { sel.value = '__other__'; other.value = c.domain; }
+
+    function sync() {
+      fOth.hidden = sel.value !== '__other__';
+      var general = sel.value === '__general__';
+      fields.dl.input.disabled = general;
+      if (general) fields.dl.input.value = '';
+    }
+    sel.onchange = function () { sync(); schedule(); }; sync();
+
+    var actions = el('div', { className: 'actions' }, wrap);
+    var save = el('button', { className: 'go save', type: 'button', textContent: 'Save this company' }, actions);
+    var saved = el('span', { className: 'saved' }, actions);
+    el('div', { style: 'height:10px' }, wrap);
+
+    function company() {
+      var o = { position: c.position, domain: sel.value, domainOther: other.value, domainLink: fields.dl.input.value, generalLink: fields.gl.input.value };
+      if (fields.name) { o.name = fields.name.input.value; o.website = fields.website.input.value; }
+      return o;
+    }
+    function paint(errors) {
+      var map = { domain: domMsg, other: othMsg, dlink: fields.dl.msg, glink: fields.gl.msg };
+      if (fields.name) { map.name = fields.name.msg; map.website = fields.website.msg; }
+      Object.keys(map).forEach(function (k) { map[k].className = 'msg ' + (errors && errors[k] ? 'bad' : ''); map[k].textContent = (errors && errors[k]) || ''; });
+      var inputs = { dlink: fields.dl.input, glink: fields.gl.input, domain: sel, other: other };
+      if (fields.name) { inputs.name = fields.name.input; inputs.website = fields.website.input; }
+      Object.keys(inputs).forEach(function (k) { inputs[k].classList.toggle('bad', !!(errors && errors[k])); });
+    }
+    var timer = null, seq = 0;
+    function schedule() {
+      saved.textContent = ''; clearTimeout(timer);
+      timer = setTimeout(function () {
+        var mine = ++seq;
+        post({ action: 'check', company: company() }).then(function (res) { if (mine === seq) paint(res.data.errors); });
+      }, 600);
+    }
+    wrap.addEventListener('input', schedule);
+    save.onclick = function () {
+      save.disabled = true; saved.textContent = 'Saving...';
+      post({ action: 'save', company: company() }).then(function (res) {
+        save.disabled = false;
+        if (res.data.ok) { paint(null); saved.textContent = 'Saved. It will be checked again.'; var b = wrap.querySelector('.badge'); b.className = 'badge sent'; b.textContent = 'Corrected'; return; }
+        saved.textContent = '';
+        if (res.data.errors) paint(res.data.errors); else saved.textContent = res.data.message || res.data.error || 'Could not save.';
+      }).catch(function () { save.disabled = false; saved.textContent = 'Could not reach the server.'; });
+    };
+  }
+})();
+</script>
+</body>
+</html>
