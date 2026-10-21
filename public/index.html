@@ -27,11 +27,11 @@
           </div>
           <div class="term">
             <b>Domain-specific link or email</b>
-            <p>The link of the <em>one specific job</em> you are targeting, or the HR email for it. The company website, home page or general careers page is <em>not</em> accepted.</p>
+            <p>The link of the <em>one specific job</em> you are targeting, or the HR email for it. A company website, home page or general careers page <em>may not be approved</em>.</p>
           </div>
           <div class="term">
             <b>Fresher hiring link or email</b>
-            <p>A link or email where freshers can apply: a careers page, the link of a specific job, or an email. You can fill this, the field above, or both.</p>
+            <p>A link or email where freshers can apply, ideally the link of a specific job. You can fill this, the field above, or both.</p>
           </div>
           <div class="term">
             <b>Company has no specific role?</b>
@@ -41,7 +41,7 @@
 
         <ul class="rules">
           <li>Fill <strong>at least one</strong> of the two link or email fields.</li>
-          <li>Paste the <strong>job's own link</strong>: open the job, then copy its address. Good: <em>company.com/careers/data-engineer-fresher</em>. Not accepted: <em>company.com</em>, <em>company.com/careers</em>, a search page, or a LinkedIn company page.</li>
+          <li>Paste the <strong>job's own link</strong>: open the job, then copy its address. Good: <em>company.com/careers/data-engineer-fresher</em>. May not be approved: <em>company.com</em>, <em>company.com/careers</em>, a search page, or a LinkedIn company page.</li>
           <li>The job must be <strong>open now</strong>. Closed jobs and links that do not open are refused.</li>
           <li>A company that is already taken, or spelled slightly differently, is not accepted.</li>
           <li><strong>First come, first served.</strong> You can submit <strong>once</strong>, and entries are final.</li>
@@ -176,8 +176,9 @@
     var el = inputs[k], msg = $('[data-m="' + k + '"]');
     el.classList.toggle('ok', st === 'ok');
     el.classList.toggle('bad', st === 'bad');
-    msg.className = 'msg ' + (st === 'ok' ? 'ok' : st === 'bad' ? 'bad' : st === 'wait' ? 'wait' : '');
-    msg.textContent = st === 'ok' ? okText(k) : st === 'wait' ? 'Checking...' : st === 'bad' ? (text || '') : '';
+    el.classList.toggle('warn', st === 'warn');
+    msg.className = 'msg ' + (st === 'ok' ? 'ok' : st === 'bad' ? 'bad' : st === 'warn' ? 'warn' : st === 'wait' ? 'wait' : '');
+    msg.textContent = st === 'ok' ? okText(k) : st === 'wait' ? 'Checking...' : st === 'bad' ? (text || '') : st === 'warn' ? (text || '') + ' You can still submit it. It will be checked again.' : '';
   }
 
   // Show or hide the fields that depend on the chosen domain.
@@ -218,9 +219,10 @@
     if (s('cname') !== 'ok' || s('csite') !== 'ok' || s('cdom') !== 'ok') return false;
     if (isOther(i) && s('cother') !== 'ok') return false;
     var dl = s('cdl'), gl = s('cgl');
-    if (isGeneral(i)) return gl === 'ok';
+    var good = function (x) { return x === 'ok' || x === 'warn'; }; // a warning does not stop the student
+    if (isGeneral(i)) return good(gl);
     if (dl === 'bad' || gl === 'bad' || dl === 'wait' || gl === 'wait') return false;
-    return dl === 'ok' || gl === 'ok';
+    return good(dl) || good(gl);
   }
 
   function refresh() {
@@ -269,22 +271,22 @@
   }
 
   function applyResult(data, snap) {
-    function apply(k, value, error) {
+    function apply(k, value, error, warning) {
       if (state[k] === 'na') return;
       if (!String(value).trim()) return setField(k, 'empty', '');
       if (inputs[k].value !== value) return; // changed again while checking
-      if (error) setField(k, 'bad', error); else setField(k, 'ok', '');
+      if (error) setField(k, 'bad', error); else if (warning) setField(k, 'warn', warning); else setField(k, 'ok', '');
     }
     apply('name', snap.name, data.student.name);
     apply('roll', snap.roll, data.student.roll);
     apply('email', snap.email, data.student.email);
     for (var i = 0; i < COUNT; i++) {
-      var c = snap.companies[i], e = data.companies[i];
+      var c = snap.companies[i], e = data.companies[i], w = (data.warnings && data.warnings[i]) || {};
       apply('cname' + i, c.name, e.name);
       apply('csite' + i, c.website, e.website);
       apply('cother' + i, c.domainOther, e.other);
-      apply('cdl' + i, c.domainLink, e.dlink);
-      apply('cgl' + i, c.generalLink, e.glink);
+      apply('cdl' + i, c.domainLink, e.dlink, w.dlink);
+      apply('cgl' + i, c.generalLink, e.glink, w.glink);
       // The domain dropdown and the "at least one link" rule are only judged on submit.
       if (e.domain) setField('cdom' + i, 'bad', e.domain);
       if (e.dlink && !c.domainLink.trim() && !isGeneral(i)) setField('cdl' + i, 'bad', e.dlink);

@@ -46,7 +46,7 @@
   <section id="results" hidden>
     <p class="note" id="greeting"></p>
     <div id="cards"></div>
-    <p class="lead"><strong>Link of the specific job or HR email:</strong> the link of one job (not the home page, careers page or a search page), or an email. <strong>Fresher hiring link or email:</strong> a careers page, a job link or an email. You can fill either one or both.</p>
+    <p class="lead"><strong>Link of the specific job or HR email:</strong> the link of one job (not the home page, careers page or a search page), or an email. <strong>Fresher hiring link or email:</strong> a link where freshers can apply, ideally one specific job, or an email. You can fill either one or both.</p>
     <p class="lead">To change a company, type the new company name and its official website. The old company is released once you save.</p>
   </section>
 </main>
@@ -129,7 +129,7 @@
     var dl = field('dl', 'Link of the specific job, or HR email', null, true);
     var gl = field('gl', 'Fresher hiring link or email (optional if you filled the field above)', null, true);
     dl.value = c.domain_link || ''; gl.value = c.general_link || '';
-    dl.placeholder = 'Link of the specific job, or HR email'; gl.placeholder = 'Careers page, job link or HR email';
+    dl.placeholder = 'Link of the specific job, or HR email'; gl.placeholder = 'Link where freshers can apply, or HR email';
 
     // pre-fill the domain
     var inList = false;
@@ -156,20 +156,25 @@
       if (fields.name) { o.name = fields.name.input.value; o.website = fields.website.input.value; }
       return o;
     }
-    function paint(errors) {
+    function paint(errors, warnings) {
       var map = { domain: domMsg, other: othMsg, dlink: fields.dl.msg, glink: fields.gl.msg };
       if (fields.name) { map.name = fields.name.msg; map.website = fields.website.msg; }
-      Object.keys(map).forEach(function (k) { map[k].className = 'msg ' + (errors && errors[k] ? 'bad' : ''); map[k].textContent = (errors && errors[k]) || ''; });
+      var warn = function (k) { return !(errors && errors[k]) && warnings && warnings[k]; };
+      Object.keys(map).forEach(function (k) {
+        var bad = errors && errors[k], w = warn(k);
+        map[k].className = 'msg ' + (bad ? 'bad' : w ? 'warn' : '');
+        map[k].textContent = bad || (w ? w + ' You can still save it. It will be checked again.' : '');
+      });
       var inputs = { dlink: fields.dl.input, glink: fields.gl.input, domain: sel, other: other };
       if (fields.name) { inputs.name = fields.name.input; inputs.website = fields.website.input; }
-      Object.keys(inputs).forEach(function (k) { inputs[k].classList.toggle('bad', !!(errors && errors[k])); });
+      Object.keys(inputs).forEach(function (k) { inputs[k].classList.toggle('bad', !!(errors && errors[k])); inputs[k].classList.toggle('warn', !!warn(k)); });
     }
     var timer = null, seq = 0;
     function schedule() {
       saved.textContent = ''; clearTimeout(timer);
       timer = setTimeout(function () {
         var mine = ++seq;
-        post({ action: 'check', company: company() }).then(function (res) { if (mine === seq) paint(res.data.errors); });
+        post({ action: 'check', company: company() }).then(function (res) { if (mine === seq) paint(res.data.errors, res.data.warnings); });
       }, 600);
     }
     wrap.addEventListener('input', schedule);
@@ -177,7 +182,7 @@
       save.disabled = true; saved.textContent = 'Saving...';
       post({ action: 'save', company: company() }).then(function (res) {
         save.disabled = false;
-        if (res.data.ok) { paint(null); saved.textContent = 'Saved. It will be checked again.'; var b = wrap.querySelector('.badge'); b.className = 'badge sent'; b.textContent = 'Corrected'; return; }
+        if (res.data.ok) { paint(null, res.data.warnings); saved.textContent = 'Saved. It will be checked again.'; var b = wrap.querySelector('.badge'); b.className = 'badge sent'; b.textContent = 'Corrected'; return; }
         saved.textContent = '';
         if (res.data.errors) paint(res.data.errors); else saved.textContent = res.data.message || res.data.error || 'Could not save.';
       }).catch(function () { save.disabled = false; saved.textContent = 'Could not reach the server.'; });

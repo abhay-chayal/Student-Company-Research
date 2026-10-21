@@ -200,11 +200,14 @@ const EMAIL = 'student@gmail.com';
 
   // ---- stricter link rules ----
   const jobLinkError = async (link) => (await full(co('Zylker', 'zylker.com', { domainLink: link }))).companies[0].dlink;
-  await t('careers pages, home pages and search pages are refused as the job link', async () => {
+  const jobLinkWarning = async (link) => (await full(co('Zylker', 'zylker.com', { domainLink: link }))).warnings[0].dlink;
+  await t('careers pages, home pages and search pages only get a warning as the job link, and can still be saved', async () => {
     for (const bad of ['company.com', 'https://company.com/', 'https://company.com/careers', 'https://company.com/jobs', 'https://company.com/en/careers',
       'https://www.linkedin.com/company/wipro', 'https://www.google.com/search?q=data+engineer+jobs', 'https://freshersdunia.in/some-company-off-campus-recruitment-2026/',
       'https://company.com/contact-us', 'https://jobs.lever.co/acme', 'https://www.linkedin.com/posts/someone_hiring-for-data-engineers-123']) {
-      assert(await jobLinkError(bad), `should refuse ${bad}`);
+      const r = await full(co('Zylker', 'zylker.com', { domainLink: bad }));
+      assert(r.warnings[0].dlink && /may not be approved/.test(r.warnings[0].dlink), `should warn about ${bad}`);
+      assert(!hasErrors(r), `${bad} must still be allowed: ${JSON.stringify(r.companies[0])}`);
     }
   });
   await t('real job links are accepted', async () => {
@@ -212,7 +215,7 @@ const EMAIL = 'student@gmail.com';
       'https://acme.wd1.myworkdayjobs.com/en-US/Careers/job/Pune/Software-Engineer_R-12345', 'https://www.amazon.jobs/en/jobs/10496769/data-engineer-intern-2027',
       'https://careers.tigeranalytics.com/#!/job-view/x-ops-trainee-campus-2027-hiring-chennai-tamil-nadu-india-2026093012572964',
       'https://boards.greenhouse.io/acme/jobs/1234567', 'https://www.linkedin.com/jobs/view/4476163990/']) {
-      assert(!(await jobLinkError(good)), `should accept ${good}: ${await jobLinkError(good)}`);
+      assert(!(await jobLinkError(good)) && !(await jobLinkWarning(good)), `should accept ${good} without a warning: ${await jobLinkWarning(good)}`);
     }
   });
   await t('tracking parameters are removed but real ones stay', async () => {
@@ -225,13 +228,15 @@ const EMAIL = 'student@gmail.com';
     assert(/brackets/.test(await jobLinkError('[careers](https://a.com/careers/data-engineer)')));
     assert(/brackets/.test(await jobLinkError('microland.com/careers](https://www.microland.com/careers')));
   });
-  await t('a careers page is fine as the fresher link, never as the domain-specific link', async () => {
+  await t('a careers page in the fresher field gives no warning; in the domain-specific field it does', async () => {
     let r = await full(co('Zylker', 'zylker.com', { domain: '__general__', domainLink: '', generalLink: 'https://zylker.com/careers/freshers' }));
     assert(!hasErrors(r), JSON.stringify(r.companies[0]));
     r = await full(co('Zylker', 'zylker.com', { domain: 'Data Engineer', domainLink: 'hr@zylker.com', generalLink: 'https://zylker.com/careers/freshers' }));
     assert(!hasErrors(r), JSON.stringify(r.companies[0]));
     r = await full(co('Zylker', 'zylker.com', { domain: 'Data Engineer', domainLink: 'https://zylker.com/careers', generalLink: '' }));
-    assert(r.companies[0].dlink, 'a careers page as the domain-specific link is refused');
+    assert(!hasErrors(r) && /careers page/.test(r.warnings[0].dlink), 'a careers page as the domain-specific link is only a warning');
+    r = await full(co('Zylker', 'zylker.com', { domain: 'Data Engineer', domainLink: '', generalLink: 'https://zylker.com/' }));
+    assert(!hasErrors(r) && /home page/.test(r.warnings[0].glink) && !/careers page/i.test(r.warnings[0].glink), 'the fresher warning does not mention careers pages');
   });
   await t('live check: refuses dead or closed jobs, lets unclear cases through', async () => {
     const http = require('http');
@@ -407,10 +412,10 @@ const EMAIL = 'student@gmail.com';
     const me = await getDb().getStudentForFix('22ECEAD001', ASHA.email);
     assert.strictEqual(me.companies[0].domain_link, 'https://example.com/careers/data-engineer-fresher', 'unchanged');
   });
-  await t('fix: a careers page is refused, a real job link is saved and marked for re-check', async () => {
-    let r = await call(fixApi, { body: { ...ASHA, action: 'save', company: { position: 2, domain: 'Data Engineer', domainLink: 'https://databricks.com/company/careers' } } });
-    assert.strictEqual(r.status, 400);
-    assert(/general careers page/.test(r.json.errors.dlink), JSON.stringify(r.json));
+  await t('fix: a careers page only warns, a real job link is saved and marked for re-check', async () => {
+    let r = await call(fixApi, { body: { ...ASHA, action: 'check', company: { position: 2, domain: 'Data Engineer', domainLink: 'https://databricks.com/company/careers' } } });
+    assert.strictEqual(r.json.ok, true, 'a warning does not block');
+    assert(/general careers page/.test(r.json.warnings.dlink), JSON.stringify(r.json));
     r = await call(fixApi, { body: { ...ASHA, action: 'check', company: { position: 2, domain: 'Data Engineer', domainLink: JOBLINK } } });
     assert.strictEqual(r.json.ok, true, 'check is a dry run');
     assert.strictEqual((await getDb().getStudentForFix('22ECEAD001', ASHA.email)).companies[1].review_status, 'to_fix', 'check saves nothing');

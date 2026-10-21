@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
     if (result.fatal === 'locked') return send(res, 409, { ok: false, message: 'This company is accepted and cannot be changed.' });
     if (result.fatal) return send(res, 404, { ok: false, message: 'Company not found.' });
     if (action === 'check' || hasErrors(result.errors)) {
-      return send(res, action === 'save' ? 400 : 200, { ok: !hasErrors(result.errors), errors: result.errors });
+      return send(res, action === 'save' ? 400 : 200, { ok: !hasErrors(result.errors), errors: result.errors, warnings: result.warnings });
     }
 
     const outcome = await db.fixCompany({ rollKey: roll.value, email: email.value, position: result.company.position, ...result.clean });
