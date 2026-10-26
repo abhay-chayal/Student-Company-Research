@@ -39,6 +39,25 @@
   button.danger { white-space:nowrap; }
   h2.sub { font-size:1.05rem; color:var(--navy); margin:28px 0 8px; }
   ul.plainlist { margin:0; padding-left:20px; color:var(--muted); }
+  .tabs { display:flex; gap:8px; margin-bottom:18px; }
+  button.tab { background:var(--paper); color:var(--navy); border-color:var(--line2); }
+  button.tab.on { background:var(--navy); color:#fffaf0; border-color:var(--navy); }
+  .dash { max-width:900px; }
+  .dash .card { padding:20px 22px; }
+  .dash h2 { font-size:1.12rem; margin:0 0 4px; color:var(--navy); }
+  .dash .hint { color:var(--muted); font-size:.85rem; margin:0 0 16px; }
+  .brow { display:grid; grid-template-columns:150px 1fr; gap:6px 14px; align-items:center; margin-bottom:12px; }
+  .brow .bl { font-weight:600; font-size:.92rem; color:var(--ink); }
+  .brow .bl small { display:block; font-weight:400; color:var(--muted); font-size:.74rem; }
+  .track2 { height:30px; background:var(--tint); border-radius:6px; overflow:hidden; display:flex; }
+  .seg { height:100%; display:flex; align-items:center; justify-content:center; color:#fff; font:600 .78rem "Segoe UI",system-ui,sans-serif; white-space:nowrap; min-width:0; overflow:hidden; }
+  .seg.sub { background:var(--navy); justify-content:flex-start; padding-left:10px; min-width:34px; }
+  .seg.accepted { background:#2f6b3f; } .seg.resubmitted { background:#2f6fbd; } .seg.to_fix { background:#b5473a; } .seg.pending { background:#b08d3c; } .seg.new { background:#9aa0aa; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0 0 16px; font-size:.82rem; color:var(--muted); }
+  .legend i { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  .tot { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  @media (max-width:640px) { .brow { grid-template-columns:1fr; } }
+  @media print { .tabs, #login, .row, #listView, button { display:none !important; } #dashView { display:block !important; } body { background:#fff; } }
 </style>
 </head>
 <body>
@@ -51,6 +70,32 @@
   </div>
 
   <div id="panel" hidden>
+    <div class="tabs">
+      <button id="tabList" class="tab on" type="button">Submissions</button>
+      <button id="tabDash" class="tab" type="button">Dashboard</button>
+    </div>
+
+    <div id="dashView" class="dash" hidden>
+      <div class="tot">
+        <div class="stat"><b id="dStudents">0</b>students have submitted</div>
+        <div class="stat"><b id="dCompanies">0</b>companies</div>
+        <button id="dashReload" class="plain" type="button">Refresh</button>
+        <button id="dashPrint" class="plain" type="button">Print</button>
+      </div>
+      <div class="card">
+        <h2>Students who have submitted, by branch</h2>
+        <p class="hint">The branch is read from the roll number (EARAD, EARCS, EARIT and so on).</p>
+        <div id="barsStudents"></div>
+      </div>
+      <div class="card">
+        <h2>Review status of the companies, by branch</h2>
+        <div class="legend" id="legend"></div>
+        <div id="barsStatus"></div>
+      </div>
+      <p class="hint" id="dashStamp"></p>
+    </div>
+
+    <div id="listView">
     <div class="row">
       <div class="stat"><b id="sCount">0</b>students submitted</div>
       <div class="stat"><b id="sCompanies">0</b>companies</div>
@@ -87,6 +132,7 @@
 
     <h2 class="sub">Similar-looking company names (a quick skim only, nothing is blocked)</h2>
     <ul id="similar" class="plainlist"></ul>
+    </div>
   </div>
 </main>
 
@@ -124,12 +170,13 @@
   }
 
   function load() {
-    api('list').then(function (r) {
+    return api('list').then(function (r) {
       if (r.status === 401) { $('#loginErr').textContent = 'Wrong password.'; $('#panel').hidden = true; $('#login').hidden = false; return null; }
       return r.json();
     }).then(function (d) {
       if (!d) return;
       $('#login').hidden = true; $('#panel').hidden = false;
+      renderDashboard(d);
       $('#sCount').textContent = d.count;
       $('#sCompanies').textContent = d.companyCount;
       $('#sReserved').textContent = d.reservedCount;
@@ -179,6 +226,81 @@
     });
   }
 
+  // ---- dashboard ----
+  var BRANCHES = [['AD', 'AI & DS'], ['CS', 'CS'], ['IT', 'IT'], ['EC', 'Electronics'], ['EE', 'Electrical'], ['ME', 'Mechanical']];
+  var STATUS = [['accepted', 'Accepted'], ['resubmitted', 'Corrected, to re-check'], ['to_fix', 'To fix'], ['pending', 'Pending'], ['new', 'Not reviewed']];
+
+  function branchOf(roll) {
+    var m = /EAR([A-Z]{2})/.exec(String(roll || '').toUpperCase().replace(/[\s\-_/.]/g, ''));
+    var code = m ? m[1] : '';
+    return BRANCHES.some(function (b) { return b[0] === code; }) ? code : 'OT';
+  }
+  function bar(label, sub) {
+    var row = document.createElement('div'); row.className = 'brow';
+    var l = document.createElement('div'); l.className = 'bl'; l.textContent = label;
+    if (sub) { var sm = document.createElement('small'); sm.textContent = sub; l.appendChild(sm); }
+    var track = document.createElement('div'); track.className = 'track2';
+    row.appendChild(l); row.appendChild(track);
+    return { row: row, track: track };
+  }
+  function seg(track, cls, widthPct, text, title) {
+    if (widthPct <= 0) return;
+    var s = document.createElement('div'); s.className = 'seg ' + cls; s.style.width = widthPct + '%';
+    s.textContent = text; s.title = title || text; track.appendChild(s);
+  }
+
+  function renderDashboard(d) {
+    if (!d) return;
+    var groups = {};
+    BRANCHES.concat([['OT', 'Other']]).forEach(function (b) { groups[b[0]] = { label: b[1], students: 0, companies: 0, status: {} }; });
+    d.students.forEach(function (s) {
+      var g = groups[branchOf(s.roll_no)];
+      g.students++;
+      s.companies.forEach(function (c) {
+        g.companies++;
+        var st = c.review_status || 'new';
+        g.status[st] = (g.status[st] || 0) + 1;
+      });
+    });
+    $('#dStudents').textContent = d.count;
+    $('#dCompanies').textContent = d.companyCount;
+
+    // "Other" is shown only when some roll number did not fit a branch
+    var order = BRANCHES.map(function (b) { return b[0]; }).concat(groups.OT.students ? ['OT'] : []);
+    var max = Math.max.apply(null, order.map(function (k) { return groups[k].students; }).concat([1]));
+
+    var box = $('#barsStudents'); box.textContent = '';
+    order.forEach(function (k) {
+      var g = groups[k], b = bar(g.label, g.students === 1 ? '1 student' : g.students + ' students');
+      if (g.students) seg(b.track, 'sub', g.students / max * 100, String(g.students), g.label + ': ' + g.students + ' students');
+      else { var z = document.createElement('div'); z.style.cssText = 'padding:0 10px;line-height:30px;color:#6d675b;font-size:.82rem'; z.textContent = '0'; b.track.appendChild(z); }
+      box.appendChild(b.row);
+    });
+
+    var lg = $('#legend'); lg.textContent = '';
+    STATUS.forEach(function (st) {
+      var span = document.createElement('span'); var i = document.createElement('i'); i.className = 'seg ' + st[0];
+      span.appendChild(i); span.appendChild(document.createTextNode(st[1])); lg.appendChild(span);
+    });
+    var sb = $('#barsStatus'); sb.textContent = '';
+    order.forEach(function (k) {
+      var g = groups[k], b = bar(g.label, g.companies + ' companies');
+      STATUS.forEach(function (st) {
+        var n = g.status[st[0]] || 0;
+        seg(b.track, st[0], g.companies ? n / g.companies * 100 : 0, n >= 3 ? String(n) : '', st[1] + ': ' + n + ' of ' + g.companies);
+      });
+      sb.appendChild(b.row);
+    });
+    $('#dashStamp').textContent = 'Updated ' + new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+  }
+
+  function showTab(name) {
+    var dash = name === 'dash';
+    $('#dashView').hidden = !dash; $('#listView').hidden = dash;
+    $('#tabDash').classList.toggle('on', dash); $('#tabList').classList.toggle('on', !dash);
+    try { sessionStorage.setItem('adminTab', name); } catch (e) { /* not available */ }
+  }
+
   function loadHistory() {
     $('#histMsg').textContent = '';
     var roll = $('#histRoll').value.trim();
@@ -224,6 +346,16 @@
   $('#go').onclick = function () { password = $('#pw').value; $('#loginErr').textContent = ''; load(); };
   $('#pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#go').click(); });
   $('#reload').onclick = load;
+  $('#tabList').onclick = function () { showTab('list'); };
+  $('#tabDash').onclick = function () { showTab('dash'); };
+  $('#dashReload').onclick = function () {
+    var b = this; b.disabled = true; b.textContent = 'Refreshing...';
+    var done = function () { b.disabled = false; b.textContent = 'Refresh'; };
+    load().then(done, done);
+  };
+  $('#dashPrint').onclick = function () { window.print(); };
+  setInterval(function () { if (!$('#dashView').hidden && !document.hidden && password) load(); }, 60000); // keep the dashboard fresh
+  try { if (sessionStorage.getItem('adminTab') === 'dash') showTab('dash'); } catch (e) { /* not available */ }
   $('#histGo').onclick = loadHistory;
   $('#histRoll').addEventListener('keydown', function (e) { if (e.key === 'Enter') loadHistory(); });
   $('#importBtn').onclick = function () { $('#importFile').click(); };
