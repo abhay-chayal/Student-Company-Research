@@ -189,6 +189,39 @@ const five = (names, extra) => names.map((n) => company(n, null, extra));
       assert.strictEqual((await q("select count(*)::int n from companies where name_key = 'brandnewco'")).rows[0].n, 1);
       assert.strictEqual((await q('select restore_company(987654321) r')).rows[0].r.code, 'missing');
     });
+    await t('details: a new submission stores them; save_details works for every company, accepted ones too, and is recorded', async () => {
+      const item = (n, i) => ({ name: n, name_key: n.toLowerCase().replace(/[^a-z]/g, ''), website: n.toLowerCase().replace(/[^a-z]/g, '') + '.com', domain_key: n.toLowerCase().replace(/[^a-z]/g, '') + 'dk', domain: 'Data Engineer', domain_link: 'hr@x.com', general_link: '',
+        employee_strength: '51-200', package_lpa: 5.5, revenue_amount: 120.5, revenue_unit: 'Crore', revenue_currency: 'INR' });
+      const r = await submit('22DET00001', 'det@x.com', ['Detail Alpha', 'Detail Bravo', 'Detail Charlie', 'Detail Delta', 'Detail Echo'].map(item));
+      assert.strictEqual(r.ok, true, JSON.stringify(r));
+      let c = (await q("select employee_strength, package_lpa::float p, revenue_amount::float v, revenue_unit, revenue_currency from companies where name_key = 'detailalpha'")).rows[0];
+      assert.deepStrictEqual([c.employee_strength, c.p, c.v, c.revenue_unit, c.revenue_currency], ['51-200', 5.5, 120.5, 'Crore', 'INR']);
+      // an accepted company: the links are locked, the three details are not
+      await q("update companies set review_status = 'accepted' where name_key = 'detailalpha'");
+      assert.strictEqual((await fix('22DET00001', 'det@x.com', 1)).code, 'locked');
+      const save = async (email, pos, extras) => (await q('select save_details($1,$2,$3,$4::jsonb) r', ['22DET00001', email, pos, JSON.stringify(extras)])).rows[0].r;
+      const more = { employee_strength: '10,000+', package_lpa: 12, revenue_amount: 3.5, revenue_unit: 'Billion', revenue_currency: 'USD' };
+      assert.strictEqual((await save('wrong@x.com', 1, more)).code, 'identity');
+      assert.strictEqual((await save('DET@x.com', 9, more)).code, 'missing');
+      assert.strictEqual((await save('DET@x.com', 1, more)).ok, true);
+      c = (await q("select employee_strength, package_lpa::float p, revenue_amount::float v, revenue_unit, revenue_currency, review_status, domain_link from companies where name_key = 'detailalpha'")).rows[0];
+      assert.deepStrictEqual([c.employee_strength, c.p, c.v, c.revenue_unit, c.revenue_currency, c.review_status, c.domain_link], ['10,000+', 12, 3.5, 'Billion', 'USD', 'accepted', 'hr@x.com']);
+      const h = (await q("select source, employee_strength, package_lpa::float p, id from company_history where roll_key = '22DET00001' and position = 1 order by id desc limit 1")).rows[0];
+      assert.deepStrictEqual([h.source, h.employee_strength, h.p], ['details', '51-200', 5.5], 'the old values are in the history');
+      // restoring that history row brings the old details back
+      assert.strictEqual((await q('select restore_company($1) r', [h.id])).rows[0].r.ok, true);
+      c = (await q("select employee_strength, package_lpa::float p from companies where name_key = 'detailalpha'")).rows[0];
+      assert.deepStrictEqual([c.employee_strength, c.p], ['51-200', 5.5]);
+      // fix_company can carry the details together with the links
+      const f = (await q("select fix_company('22DET00001','det@x.com',2,'Data Engineer','https://detailbravo.com/jobs/12345','',null,null,null,null,$1::jsonb) r", [JSON.stringify(more)])).rows[0].r;
+      assert.strictEqual(f.ok, true, JSON.stringify(f));
+      c = (await q("select employee_strength, package_lpa::float p, domain_link from companies where name_key = 'detailbravo'")).rows[0];
+      assert.deepStrictEqual([c.employee_strength, c.p, c.domain_link], ['10,000+', 12, 'https://detailbravo.com/jobs/12345']);
+      // a fix without details leaves the saved ones alone
+      const g = (await q("select fix_company('22DET00001','det@x.com',2,'Data Engineer','https://detailbravo.com/jobs/99999','') r")).rows[0].r;
+      assert.strictEqual(g.ok, true);
+      assert.strictEqual((await q("select employee_strength from companies where name_key = 'detailbravo'")).rows[0].employee_strength, '10,000+');
+    });
     await t('fix: 25 students claim the same new website at once - exactly one wins', async () => {
       const tasks = [];
       for (let i = 0; i < 25; i++) {
@@ -208,7 +241,7 @@ const five = (names, extra) => names.map((n) => company(n, null, extra));
       const c = new Client(conn);
       await c.connect();
       try {
-        for (const sql of ['select * from students', 'select * from companies', 'select * from reserved_companies', 'select * from company_history', 'select restore_company(1)',
+        for (const sql of ['select * from students', 'select * from companies', 'select * from reserved_companies', 'select * from company_history', 'select restore_company(1)', "select save_details('X','x@x.com',1,'{}'::jsonb)",
           "select submit_entry('X','X','X','x@x.com','[]'::jsonb)", "select fix_company('X','x@x.com',1,'d','','')", "select apply_review('[]'::jsonb)"]) {
           await c.query('set role anon');
           await assert.rejects(c.query(sql), /permission denied/i, 'anon must not run: ' + sql);

@@ -25,7 +25,7 @@
   <div class="wrap">
     <div class="eyebrow">Foundation Course &nbsp;&middot;&nbsp; FEC-28</div>
     <h1>Fix your companies</h1>
-    <p>Your five companies stay reserved for you. Correct the links, or replace a company with a different one if you prefer.</p>
+    <p>Your five companies stay reserved for you. Fill in the three details for every company, and correct the links of the ones that are not accepted yet.</p>
   </div>
 </header>
 
@@ -46,8 +46,8 @@
   <section id="results" hidden>
     <p class="note" id="greeting"></p>
     <div id="cards"></div>
-    <p class="lead"><strong>Link of the specific job or HR email:</strong> the link of one job (not the home page, careers page or a search page), or an email. <strong>Fresher hiring link or email:</strong> a link where freshers can apply, ideally one specific job, or an email. You can fill either one or both.</p>
-    <p class="lead">To change a company, type the new company name and its official website. The old company is released once you save.</p>
+    <p class="lead"><strong>Link of the specific job or HR email:</strong> the link of one job (not the home page, careers page or a search page), or an email. <strong>Fresher hiring link or email:</strong> the link of one specific job where freshers can apply, or an email. A careers page, home page or search page may not be approved in either field. You can fill either one or both.</p>
+    <p class="lead"><strong>Three details are compulsory for all five companies:</strong> the employee strength, the package offered to freshers (in LPA) and the yearly revenue of the company. Give a figure for each. Accepted companies are locked for links, but you can still fill these three details.</p>
   </section>
 </main>
 
@@ -80,11 +80,65 @@
 
   function el(tag, props, parent) { var e = document.createElement(tag); Object.keys(props || {}).forEach(function (k) { e[k] = props[k]; }); if (parent) parent.appendChild(e); return e; }
 
+  var OPTS = { strength: [], units: [], currencies: [] };
+  var filled = {}; // position -> true once the three details of that company are complete
+
+  function updateGreeting(name) {
+    var n = Object.keys(filled).filter(function (k) { return filled[k]; }).length;
+    $('#greeting').textContent = 'Hello ' + name + '. Details filled for ' + n + ' of 5 companies. Accepted companies are locked, but their three details stay open.';
+  }
+
   function show(data) {
+    OPTS = data.options || OPTS;
     $('#loginBox').hidden = true; $('#results').hidden = false;
-    $('#greeting').textContent = 'Hello ' + data.name + '. Companies marked Accepted are locked. Correct the others, or change the company.';
     var box = $('#cards'); box.textContent = '';
+    filled = {};
+    data.companies.forEach(function (c) { filled[c.position] = !!c.details_complete; });
+    updateGreeting(data.name);
+    session.name = data.name;
     data.companies.forEach(function (c) { card(box, c); });
+  }
+
+  // The three compulsory details of one company: employee strength, fresher package, revenue.
+  function detailsBlock(parent, c) {
+    el('div', { className: 'sub-h', textContent: 'Company details (compulsory)' }, parent);
+    var grid = el('div', { className: 'grid' }, parent);
+    function option(sel, text, value) { el('option', { value: value == null ? text : value, textContent: text }, sel); }
+
+    var f1 = el('div', { className: 'field' }, grid); el('label', { textContent: 'Employee strength (number of employees)' }, f1);
+    var str = el('select', {}, f1); option(str, 'Choose a range...', '');
+    OPTS.strength.forEach(function (v) { option(str, v); });
+    str.value = c.employee_strength || ''; var m1 = el('div', { className: 'msg' }, f1);
+
+    var f2 = el('div', { className: 'field' }, grid); el('label', { textContent: 'Fresher package (in LPA)' }, f2);
+    var pkg = el('input', { type: 'text', maxLength: 8, placeholder: 'e.g. 6.5' }, f2); pkg.inputMode = 'decimal';
+    pkg.value = c.package_lpa == null ? '' : String(c.package_lpa); var m2 = el('div', { className: 'msg' }, f2);
+
+    var f3 = el('div', { className: 'field full' }, grid); el('label', { textContent: 'Yearly revenue of the company (latest year)' }, f3);
+    var row = el('div', { className: 'revrow' }, f3);
+    var rev = el('input', { type: 'text', maxLength: 14, placeholder: 'e.g. 250' }, row); rev.inputMode = 'decimal';
+    rev.value = c.revenue_amount == null ? '' : String(c.revenue_amount);
+    var unit = el('select', {}, row); option(unit, 'Unit', ''); OPTS.units.forEach(function (v) { option(unit, v); }); unit.value = c.revenue_unit || '';
+    var cur = el('select', {}, row); option(cur, 'Currency', ''); OPTS.currencies.forEach(function (v) { option(cur, v); }); cur.value = c.revenue_currency || '';
+    var m3 = el('div', { className: 'msg' }, f3);
+
+    return {
+      inputs: [str, pkg, rev, unit, cur],
+      values: function () { return { strength: str.value, packageLpa: pkg.value, revenueAmount: rev.value, revenueUnit: unit.value, revenueCurrency: cur.value }; },
+      complete: function () { var v = this.values(); return !!(v.strength && v.packageLpa.trim() && v.revenueAmount.trim() && v.revenueUnit && v.revenueCurrency); },
+      paint: function (errors) {
+        [[m1, 'strength', str], [m2, 'pkg', pkg], [m3, 'revenue', rev]].forEach(function (x) {
+          var e = errors && errors[x[1]];
+          x[0].className = 'msg ' + (e ? 'bad' : ''); x[0].textContent = e || ''; x[2].classList.toggle('bad', !!e);
+        });
+      },
+    };
+  }
+
+  function setDetailsBadge(wrap, done) {
+    var b = wrap.querySelector('.badge.details');
+    if (!b) { b = document.createElement('span'); b.className = 'badge details'; wrap.querySelector('h2').appendChild(b); }
+    b.className = 'badge details ' + (done ? 'done' : 'need'); b.textContent = done ? 'Details filled' : 'Details needed';
   }
 
   function card(box, c) {
@@ -95,7 +149,25 @@
     h.appendChild(document.createTextNode(' ' + c.name));
     el('span', { className: 'badge ' + st[1], textContent: st[0] }, h);
 
-    if (c.review_status === 'accepted') { el('div', { className: 'locked', textContent: 'Accepted. Nothing to change.' }, wrap); return; }
+    setDetailsBadge(wrap, !!c.details_complete);
+    if (c.review_status === 'accepted') {
+      el('div', { className: 'locked', textContent: 'Accepted. The links are locked.' }, wrap);
+      var blockA = detailsBlock(wrap, c);
+      var actionsA = el('div', { className: 'actions' }, wrap);
+      var saveA = el('button', { className: 'go save', type: 'button', textContent: 'Save details' }, actionsA);
+      var savedA = el('span', { className: 'saved' }, actionsA);
+      el('div', { style: 'height:10px' }, wrap);
+      saveA.onclick = function () {
+        saveA.disabled = true; savedA.textContent = 'Saving...';
+        post({ action: 'details', company: Object.assign({ position: c.position }, blockA.values()) }).then(function (res) {
+          saveA.disabled = false;
+          if (res.data.ok) { blockA.paint(null); savedA.textContent = 'Saved.'; filled[c.position] = true; setDetailsBadge(wrap, true); updateGreeting(session.name); return; }
+          savedA.textContent = '';
+          if (res.data.errors) blockA.paint(res.data.errors); else savedA.textContent = res.data.message || res.data.error || 'Could not save.';
+        }).catch(function () { saveA.disabled = false; savedA.textContent = 'Could not reach the server.'; });
+      };
+      return;
+    }
     if (c.review_note) el('div', { className: 'note bad', textContent: c.review_note }, wrap);
 
     var fields = {}, grid = el('div', { className: 'grid' }, wrap);
@@ -129,7 +201,7 @@
     var dl = field('dl', 'Link of the specific job, or HR email', null, true);
     var gl = field('gl', 'Fresher hiring link or email (optional if you filled the field above)', null, true);
     dl.value = c.domain_link || ''; gl.value = c.general_link || '';
-    dl.placeholder = 'Link of the specific job, or HR email'; gl.placeholder = 'Link where freshers can apply, or HR email';
+    dl.placeholder = 'Link of the specific job, or HR email'; gl.placeholder = 'Link of a specific job, or HR email';
 
     // pre-fill the domain
     var inList = false;
@@ -146,15 +218,27 @@
     }
     sel.onchange = function () { sync(); schedule(); }; sync();
 
+    var block = detailsBlock(wrap, c);
     var actions = el('div', { className: 'actions' }, wrap);
     var save = el('button', { className: 'go save', type: 'button', textContent: 'Save this company' }, actions);
+    var saveD = el('button', { className: 'go save plain', type: 'button', textContent: 'Save details only' }, actions);
     var saved = el('span', { className: 'saved' }, actions);
     el('div', { style: 'height:10px' }, wrap);
+    // the three details can be saved on their own, without fixing the links first
+    saveD.onclick = function () {
+      saveD.disabled = true; saved.textContent = 'Saving...';
+      post({ action: 'details', company: Object.assign({ position: c.position }, block.values()) }).then(function (res) {
+        saveD.disabled = false;
+        if (res.data.ok) { block.paint(null); saved.textContent = 'Details saved.'; filled[c.position] = true; setDetailsBadge(wrap, true); updateGreeting(session.name); return; }
+        saved.textContent = '';
+        if (res.data.errors) block.paint(res.data.errors); else saved.textContent = res.data.message || res.data.error || 'Could not save.';
+      }).catch(function () { saveD.disabled = false; saved.textContent = 'Could not reach the server.'; });
+    };
 
     function company() {
       var o = { position: c.position, domain: sel.value, domainOther: other.value, domainLink: fields.dl.input.value, generalLink: fields.gl.input.value };
       if (fields.name) { o.name = fields.name.input.value; o.website = fields.website.input.value; }
-      return o;
+      return Object.assign(o, block.values());
     }
     function paint(errors, warnings) {
       var map = { domain: domMsg, other: othMsg, dlink: fields.dl.msg, glink: fields.gl.msg };
@@ -165,6 +249,7 @@
         map[k].className = 'msg ' + (bad ? 'bad' : w ? 'warn' : '');
         map[k].textContent = bad || (w ? w + ' You can still save it. It will be checked again.' : '');
       });
+      block.paint(errors);
       var inputs = { dlink: fields.dl.input, glink: fields.gl.input, domain: sel, other: other };
       if (fields.name) { inputs.name = fields.name.input; inputs.website = fields.website.input; }
       Object.keys(inputs).forEach(function (k) { inputs[k].classList.toggle('bad', !!(errors && errors[k])); inputs[k].classList.toggle('warn', !!warn(k)); });
@@ -182,7 +267,9 @@
       save.disabled = true; saved.textContent = 'Saving...';
       post({ action: 'save', company: company() }).then(function (res) {
         save.disabled = false;
-        if (res.data.ok) { paint(null, res.data.warnings); saved.textContent = 'Saved. It will be checked again.'; var b = wrap.querySelector('.badge'); b.className = 'badge sent'; b.textContent = 'Corrected'; return; }
+        if (res.data.ok) {
+          if (block.complete()) { filled[c.position] = true; setDetailsBadge(wrap, true); updateGreeting(session.name); }
+          paint(null, res.data.warnings); saved.textContent = block.complete() ? 'Saved. It will be checked again.' : 'Saved. Remember to fill the three company details too.'; var b = wrap.querySelector('.badge'); b.className = 'badge sent'; b.textContent = 'Corrected'; return; }
         saved.textContent = '';
         if (res.data.errors) paint(res.data.errors); else saved.textContent = res.data.message || res.data.error || 'Could not save.';
       }).catch(function () { save.disabled = false; saved.textContent = 'Could not reach the server.'; });

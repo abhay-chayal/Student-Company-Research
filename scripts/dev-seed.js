@@ -3,8 +3,9 @@
 const { getDb } = require('../lib/db');
 const { nameKey, websiteKey } = require('../lib/normalize');
 
-const company = (name, website, domain, domainLink, generalLink) => ({
-  name, name_key: nameKey(name).key, website, domain_key: websiteKey(website).key, domain, domain_link: domainLink, general_link: generalLink,
+const DETAILS = { employee_strength: '201-1,000', package_lpa: 6.5, revenue_amount: 250, revenue_unit: 'Crore', revenue_currency: 'INR' };
+const company = (name, website, domain, domainLink, generalLink, details) => ({
+  name, name_key: nameKey(name).key, website, domain_key: websiteKey(website).key, domain, domain_link: domainLink, general_link: generalLink, ...(details || {}),
 });
 
 async function seed() {
@@ -22,7 +23,7 @@ async function seed() {
   });
   await db.submit({
     rollNo: '99TEST002', rollKey: '99TEST002', name: 'Test Student Two', email: 'two@test.dev',
-    companies: ['Zeta One', 'Zeta Two', 'Zeta Three', 'Zeta Four', 'Zeta Five'].map((n, i) => company(n, `zeta${i + 1}-qa-test.com`, 'Data Engineer', `https://zeta${i + 1}-qa-test.com/jobs/role-${i + 1}`, '')),
+    companies: ['Zeta One', 'Zeta Two', 'Zeta Three', 'Zeta Four', 'Zeta Five'].map((n, i) => company(n, `zeta${i + 1}-qa-test.com`, 'Data Engineer', `https://zeta${i + 1}-qa-test.com/jobs/role-${i + 1}`, '', DETAILS)),
   });
   const items = [
     { roll: '99TEST001', name_key: nameKey('Alpha Works').key, status: 'accepted', reason: '' },

@@ -31,7 +31,7 @@
           </div>
           <div class="term">
             <b>Fresher hiring link or email</b>
-            <p>A link or email where freshers can apply, ideally the link of a specific job. You can fill this, the field above, or both.</p>
+            <p>The link of a specific job where freshers can apply, or an email. You can fill this, the field above, or both.</p>
           </div>
           <div class="term">
             <b>Company has no specific role?</b>
@@ -124,6 +124,9 @@
     options += '<optgroup label="Not listed / not role based">' +
       '<option value="__general__">' + cfg.general + '</option><option value="__other__">Other (type your own)</option></optgroup>';
 
+    var strengthOptions = '<option value="">Choose a range...</option>' + (cfg.strength || []).map(function (v) { return '<option>' + v + '</option>'; }).join('');
+    var unitOptions = '<option value="">Unit</option>' + (cfg.units || []).map(function (v) { return '<option>' + v + '</option>'; }).join('');
+    var currencyOptions = '<option value="">Currency</option>' + (cfg.currencies || []).map(function (v) { return '<option>' + v + '</option>'; }).join('');
     var box = $('#companies');
     for (var i = 0; i < COUNT; i++) {
       var card = document.createElement('div');
@@ -149,6 +152,16 @@
           '<div class="field full"><label>Fresher hiring link or email <small id="glreq' + i + '">(optional if you gave the field above)</small></label>' +
             '<input type="text" maxlength="300" data-k="cgl' + i + '" placeholder="Link of a specific job, or HR email">' +
             '<div class="msg" data-m="cgl' + i + '"></div></div>' +
+          '<div class="field"><label>Employee strength <small>(number of employees)</small></label>' +
+            '<select data-k="cstr' + i + '">' + strengthOptions + '</select>' +
+            '<div class="msg" data-m="cstr' + i + '"></div></div>' +
+          '<div class="field"><label>Fresher package <small>(in LPA)</small></label>' +
+            '<input type="text" maxlength="8" inputmode="decimal" data-k="cpkg' + i + '" placeholder="e.g. 6.5">' +
+            '<div class="msg" data-m="cpkg' + i + '"></div></div>' +
+          '<div class="field full"><label>Yearly revenue of the company <small>(latest year)</small></label>' +
+            '<div class="revrow"><input type="text" maxlength="14" inputmode="decimal" data-k="crev' + i + '" placeholder="e.g. 250">' +
+            '<select data-k="cunit' + i + '">' + unitOptions + '</select><select data-k="ccur' + i + '">' + currencyOptions + '</select></div>' +
+            '<div class="msg" data-m="crev' + i + '"></div></div>' +
         '</div>';
       box.appendChild(card);
     }
@@ -174,6 +187,7 @@
   function setField(k, st, text) {
     state[k] = st;
     var el = inputs[k], msg = $('[data-m="' + k + '"]');
+    if (!msg) { state[k] = st; return; } // the unit and currency selects share the message of the revenue field
     el.classList.toggle('ok', st === 'ok');
     el.classList.toggle('bad', st === 'bad');
     el.classList.toggle('warn', st === 'warn');
@@ -209,6 +223,8 @@
         name: inputs['cname' + i].value, website: inputs['csite' + i].value,
         domain: inputs['cdom' + i].value, domainOther: inputs['cother' + i].value,
         domainLink: inputs['cdl' + i].value, generalLink: inputs['cgl' + i].value,
+        strength: inputs['cstr' + i].value, packageLpa: inputs['cpkg' + i].value,
+        revenueAmount: inputs['crev' + i].value, revenueUnit: inputs['cunit' + i].value, revenueCurrency: inputs['ccur' + i].value,
       });
     }
     return { name: inputs.name.value, roll: inputs.roll.value, email: inputs.email.value, companies: companies, hp: $('#hp').value };
@@ -218,6 +234,7 @@
     var s = function (k) { return state[k + i]; };
     if (s('cname') !== 'ok' || s('csite') !== 'ok' || s('cdom') !== 'ok') return false;
     if (isOther(i) && s('cother') !== 'ok') return false;
+    if (s('cstr') !== 'ok' || s('cpkg') !== 'ok' || s('crev') !== 'ok' || s('cunit') !== 'ok' || s('ccur') !== 'ok') return false; // the three details are compulsory
     var dl = s('cdl'), gl = s('cgl');
     var good = function (x) { return x === 'ok' || x === 'warn'; }; // a warning does not stop the student
     if (isGeneral(i)) return good(gl);
@@ -287,6 +304,9 @@
       apply('cother' + i, c.domainOther, e.other);
       apply('cdl' + i, c.domainLink, e.dlink, w.dlink);
       apply('cgl' + i, c.generalLink, e.glink, w.glink);
+      apply('cstr' + i, c.strength, e.strength);
+      apply('cpkg' + i, c.packageLpa, e.pkg);
+      apply('crev' + i, c.revenueAmount, e.revenue);
       // The domain dropdown and the "at least one link" rule are only judged on submit.
       if (e.domain) setField('cdom' + i, 'bad', e.domain);
       if (e.dlink && !c.domainLink.trim() && !isGeneral(i)) setField('cdl' + i, 'bad', e.dlink);

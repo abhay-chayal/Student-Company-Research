@@ -26,6 +26,13 @@ alter table companies add column if not exists domain        text not null defau
 alter table companies add column if not exists domain_link   text not null default '';
 alter table companies add column if not exists general_link  text not null default '';
 
+-- The three details the HOD asked for on every company (all compulsory in the app).
+alter table companies add column if not exists employee_strength text not null default '';   -- a range, e.g. 201-1,000
+alter table companies add column if not exists package_lpa       numeric(6,2);               -- fresher package, lakh per annum
+alter table companies add column if not exists revenue_amount    numeric(14,2);
+alter table companies add column if not exists revenue_unit      text not null default '';   -- Crore | Million | Billion
+alter table companies add column if not exists revenue_currency  text not null default '';   -- INR | USD | EUR | GBP | JPY
+
 alter table students add column if not exists email text not null default '';
 
 -- Companies that are already taken before any student starts (the college's existing list).
@@ -108,11 +115,14 @@ begin
     for v_item in select * from jsonb_array_elements(p_companies) loop
       v_pos := v_pos + 1;
       insert into companies (student_id, position, name, name_key, website, domain_key,
-                             domain, domain_link, general_link)
+                             domain, domain_link, general_link,
+                             employee_strength, package_lpa, revenue_amount, revenue_unit, revenue_currency)
       values (v_student_id, v_pos, v_item->>'name', v_item->>'name_key',
               v_item->>'website', v_item->>'domain_key',
               coalesce(v_item->>'domain', ''), coalesce(v_item->>'domain_link', ''),
-              coalesce(v_item->>'general_link', ''));
+              coalesce(v_item->>'general_link', ''),
+              coalesce(v_item->>'employee_strength', ''), (v_item->>'package_lpa')::numeric, (v_item->>'revenue_amount')::numeric,
+              coalesce(v_item->>'revenue_unit', ''), coalesce(v_item->>'revenue_currency', ''));
     end loop;
   exception when unique_violation then
     -- Safety net: the unique constraints refused something. Everything above is rolled back.
@@ -159,6 +169,11 @@ create table if not exists company_history (
   restored_at   timestamptz
 );
 create index if not exists company_history_roll on company_history (roll_key, changed_at);
+alter table company_history add column if not exists employee_strength text not null default '';
+alter table company_history add column if not exists package_lpa       numeric(6,2);
+alter table company_history add column if not exists revenue_amount    numeric(14,2);
+alter table company_history add column if not exists revenue_unit      text not null default '';
+alter table company_history add column if not exists revenue_currency  text not null default '';
 alter table company_history enable row level security;
 
 -- Sets the review result of many companies at once (used by the admin page's Import button).
@@ -184,11 +199,13 @@ $$;
 -- A student corrects one company. The roll number and the email must match, accepted
 -- companies are locked, and a changed name or website goes through the same uniqueness
 -- checks as a new submission (ignoring this company's own old values).
+drop function if exists fix_company(text, text, integer, text, text, text, text, text, text, text);
 create or replace function fix_company(
   p_roll_key text, p_email text, p_position integer,
   p_domain text, p_domain_link text, p_general_link text,
   p_name text default null, p_name_key text default null,
-  p_website text default null, p_domain_key text default null
+  p_website text default null, p_domain_key text default null,
+  p_extras jsonb default null
 ) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -229,10 +246,17 @@ begin
   end if;
 
   begin
-    insert into company_history (roll_key, student_name, position, source, name, name_key, website, domain_key, domain, domain_link, general_link, review_status, review_note)
+    insert into company_history (roll_key, student_name, position, source, name, name_key, website, domain_key, domain, domain_link, general_link, review_status, review_note,
+                                 employee_strength, package_lpa, revenue_amount, revenue_unit, revenue_currency)
     values (v_student.roll_key, v_student.name, v_company.position, 'fix', v_company.name, v_company.name_key, v_company.website, v_company.domain_key,
-            v_company.domain, v_company.domain_link, v_company.general_link, v_company.review_status, v_company.review_note);
+            v_company.domain, v_company.domain_link, v_company.general_link, v_company.review_status, v_company.review_note,
+            v_company.employee_strength, v_company.package_lpa, v_company.revenue_amount, v_company.revenue_unit, v_company.revenue_currency);
     update companies set
+      employee_strength = coalesce(p_extras->>'employee_strength', employee_strength),
+      package_lpa       = coalesce((p_extras->>'package_lpa')::numeric, package_lpa),
+      revenue_amount    = coalesce((p_extras->>'revenue_amount')::numeric, revenue_amount),
+      revenue_unit      = coalesce(p_extras->>'revenue_unit', revenue_unit),
+      revenue_currency  = coalesce(p_extras->>'revenue_currency', revenue_currency),
       domain       = coalesce(p_domain, domain),
       domain_link  = coalesce(p_domain_link, domain_link),
       general_link = coalesce(p_general_link, general_link),
@@ -247,6 +271,40 @@ begin
     return jsonb_build_object('ok', false, 'code', 'race');
   end;
 
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- A student saves the three details of one company. Allowed for every company, accepted ones included
+-- (the links and the company itself stay locked). The roll number and the email must match.
+create or replace function save_details(
+  p_roll_key text, p_email text, p_position integer, p_extras jsonb
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student students%rowtype;
+  v_company companies%rowtype;
+begin
+  perform pg_advisory_xact_lock(7001);
+  select * into v_student from students where roll_key = p_roll_key;
+  if not found or v_student.email = '' or lower(v_student.email) <> lower(p_email) then
+    return jsonb_build_object('ok', false, 'code', 'identity');
+  end if;
+  select * into v_company from companies where student_id = v_student.id and position = p_position;
+  if not found then return jsonb_build_object('ok', false, 'code', 'missing'); end if;
+
+  insert into company_history (roll_key, student_name, position, source, name, name_key, website, domain_key, domain, domain_link, general_link, review_status, review_note,
+                               employee_strength, package_lpa, revenue_amount, revenue_unit, revenue_currency)
+  values (v_student.roll_key, v_student.name, v_company.position, 'details', v_company.name, v_company.name_key, v_company.website, v_company.domain_key,
+          v_company.domain, v_company.domain_link, v_company.general_link, v_company.review_status, v_company.review_note,
+          v_company.employee_strength, v_company.package_lpa, v_company.revenue_amount, v_company.revenue_unit, v_company.revenue_currency);
+  update companies set
+    employee_strength = p_extras->>'employee_strength',
+    package_lpa       = (p_extras->>'package_lpa')::numeric,
+    revenue_amount    = (p_extras->>'revenue_amount')::numeric,
+    revenue_unit      = p_extras->>'revenue_unit',
+    revenue_currency  = p_extras->>'revenue_currency'
+  where id = v_company.id;
   return jsonb_build_object('ok', true);
 end;
 $$;
@@ -288,12 +346,16 @@ begin
   end if;
 
   begin
-    insert into company_history (roll_key, student_name, position, source, name, name_key, website, domain_key, domain, domain_link, general_link, review_status, review_note)
+    insert into company_history (roll_key, student_name, position, source, name, name_key, website, domain_key, domain, domain_link, general_link, review_status, review_note,
+                                 employee_strength, package_lpa, revenue_amount, revenue_unit, revenue_currency)
     values (v_student.roll_key, v_student.name, v_company.position, 'restore', v_company.name, v_company.name_key, v_company.website, v_company.domain_key,
-            v_company.domain, v_company.domain_link, v_company.general_link, v_company.review_status, v_company.review_note);
+            v_company.domain, v_company.domain_link, v_company.general_link, v_company.review_status, v_company.review_note,
+            v_company.employee_strength, v_company.package_lpa, v_company.revenue_amount, v_company.revenue_unit, v_company.revenue_currency);
     update companies set
       name = h.name, name_key = h.name_key, website = h.website, domain_key = h.domain_key,
       domain = h.domain, domain_link = h.domain_link, general_link = h.general_link,
+      employee_strength = h.employee_strength, package_lpa = h.package_lpa, revenue_amount = h.revenue_amount,
+      revenue_unit = h.revenue_unit, revenue_currency = h.revenue_currency,
       review_status = h.review_status, review_note = h.review_note
     where id = v_company.id;
     update company_history set restored_at = now() where id = h.id;
@@ -306,7 +368,9 @@ $$;
 
 revoke all on function apply_review(jsonb) from public, anon, authenticated;
 grant execute on function apply_review(jsonb) to service_role;
+revoke all on function save_details(text, text, integer, jsonb) from public, anon, authenticated;
+grant execute on function save_details(text, text, integer, jsonb) to service_role;
 revoke all on function restore_company(bigint) from public, anon, authenticated;
 grant execute on function restore_company(bigint) to service_role;
-revoke all on function fix_company(text, text, integer, text, text, text, text, text, text, text) from public, anon, authenticated;
-grant execute on function fix_company(text, text, integer, text, text, text, text, text, text, text) to service_role;
+revoke all on function fix_company(text, text, integer, text, text, text, text, text, text, text, jsonb) from public, anon, authenticated;
+grant execute on function fix_company(text, text, integer, text, text, text, text, text, text, text, jsonb) to service_role;

@@ -3,6 +3,7 @@ process.env.SKIP_DNS = '1';
 process.env.SKIP_LINK_LIVE = '1';
 delete process.env.SUPABASE_URL;
 process.env.ADMIN_PASSWORD = 'secret-test-pw';
+process.env.ALLOW_COMPANY_CHANGE = '1'; // for the tests that replace a company; one test below turns it off
 const assert = require('assert');
 const { nameKey, coreKey, websiteKey, rollNumber, emailAddress, hiringLink, domainText } = require('../lib/normalize');
 const { evaluate, hasErrors } = require('../lib/evaluate');
@@ -20,7 +21,8 @@ const site = (s) => websiteKey(s).key;
 
 // A complete, valid company row.
 const co = (name, website, extra) => ({
-  name, website, domain: 'Data Engineer', domainLink: 'https://example.com/careers/data-engineer-fresher', generalLink: '', ...extra,
+  name, website, domain: 'Data Engineer', domainLink: 'https://example.com/careers/data-engineer-fresher', generalLink: '',
+  strength: '201-1,000', packageLpa: '6.5', revenueAmount: '250', revenueUnit: 'Crore', revenueCurrency: 'INR', ...extra,
 });
 const slug = (n) => n.toLowerCase().replace(/[^a-z]/g, '');
 const five = (names) => names.map((n) => co(n, `${slug(n)}.com`));
@@ -228,7 +230,33 @@ const EMAIL = 'student@gmail.com';
     assert(/brackets/.test(await jobLinkError('[careers](https://a.com/careers/data-engineer)')));
     assert(/brackets/.test(await jobLinkError('microland.com/careers](https://www.microland.com/careers')));
   });
-  await t('a careers page in the fresher field gives no warning; in the domain-specific field it does', async () => {
+  await t('the three details are compulsory and checked: strength range, package in LPA, revenue with unit and currency', async () => {
+    let r = await full(co('Zylker', 'zylker.com', { strength: '', packageLpa: '', revenueAmount: '', revenueUnit: '', revenueCurrency: '' }));
+    assert(r.companies[0].strength && r.companies[0].pkg && r.companies[0].revenue, 'all three missing: ' + JSON.stringify(r.companies[0]));
+    r = await full(co('Zylker', 'zylker.com', { strength: 'lots', packageLpa: 'six', revenueAmount: 'a lot' }));
+    assert(r.companies[0].strength && r.companies[0].pkg && r.companies[0].revenue, 'junk values refused');
+    r = await full(co('Zylker', 'zylker.com', { packageLpa: '0.1' })); assert(r.companies[0].pkg, 'package too low');
+    r = await full(co('Zylker', 'zylker.com', { packageLpa: '500' })); assert(r.companies[0].pkg, 'package too high');
+    r = await full(co('Zylker', 'zylker.com', { revenueUnit: '' })); assert(r.companies[0].revenue, 'revenue needs a unit');
+    r = await full(co('Zylker', 'zylker.com', { revenueCurrency: '' })); assert(r.companies[0].revenue, 'revenue needs a currency');
+    r = await full(co('Zylker', 'zylker.com', { packageLpa: '6,5 LPA', revenueAmount: '1,250.5' }));
+    assert(!hasErrors(r), 'commas and the word LPA are tolerated: ' + JSON.stringify(r.companies[0]));
+    assert.strictEqual(r.clean.companies[0].package_lpa, 6.5);
+    assert.strictEqual(r.clean.companies[0].revenue_amount, 1250.5);
+    assert.strictEqual(r.clean.companies[0].employee_strength, '201-1,000');
+  });
+  await t('a careers page gets a warning in both fields; the fresher warning no longer says it is fine', async () => {
+    const both = await full(co('Zylker', 'zylker.com', { domain: 'Data Engineer', domainLink: 'https://zylker.com/careers', generalLink: 'https://zylker.com/careers' }));
+    assert(!hasErrors(both) && /careers page/.test(both.warnings[0].dlink) && /careers page/.test(both.warnings[0].glink), JSON.stringify(both.warnings[0]));
+    assert(/may not be approved/.test(both.warnings[0].glink));
+  });
+  await t('a specific job link or an email gives no warning in the fresher field', async () => {
+    for (const good of ['https://zylker.com/careers/data-engineer-fresher', 'hr@zylker.com']) {
+      const r = await full(co('Zylker', 'zylker.com', { domain: 'Data Engineer', domainLink: '', generalLink: good }));
+      assert(!hasErrors(r) && !r.warnings[0].glink, good + ': ' + JSON.stringify(r.warnings[0]));
+    }
+  });
+  await t('the fresher home-page warning does not mention careers pages', async () => {
     let r = await full(co('Zylker', 'zylker.com', { domain: '__general__', domainLink: '', generalLink: 'https://zylker.com/careers/freshers' }));
     assert(!hasErrors(r), JSON.stringify(r.companies[0]));
     r = await full(co('Zylker', 'zylker.com', { domain: 'Data Engineer', domainLink: 'hr@zylker.com', generalLink: 'https://zylker.com/careers/freshers' }));
@@ -411,6 +439,66 @@ const EMAIL = 'student@gmail.com';
     assert(/accepted/.test(r.json.message));
     const me = await getDb().getStudentForFix('22ECEAD001', ASHA.email);
     assert.strictEqual(me.companies[0].domain_link, 'https://example.com/careers/data-engineer-fresher', 'unchanged');
+  });
+  const DETAILS = { strength: '1,001-5,000', packageLpa: '7.2', revenueAmount: '1,250', revenueUnit: 'Million', revenueCurrency: 'USD' };
+  await t('details: lookup offers the dropdown options and says which companies are complete', async () => {
+    // an older student, who submitted before the three details existed
+    const old = (n) => ({ name: n, name_key: key(n), website: slug(n) + '.com', domain_key: slug(n), domain: 'Data Engineer', domain_link: JOBLINK, general_link: '' });
+    const made = await getDb().submit({ rollNo: '21LEG0001', rollKey: '21LEG0001', name: 'Old Student', email: 'old@student.com', companies: ['Legacy One', 'Legacy Two', 'Legacy Three', 'Legacy Four', 'Legacy Five'].map(old) });
+    assert.strictEqual(made.ok, true);
+    const r = await call(fixApi, { body: { roll: '21LEG0001', email: 'old@student.com', action: 'lookup' } });
+    assert(r.json.options.strength.includes('201-1,000') && r.json.options.units.includes('Crore') && r.json.options.currencies.includes('INR'));
+    assert(r.json.companies.every((c) => c.details_complete === false), 'nothing is filled yet');
+    assert(r.json.companies.every((c) => c.editable.details === true), 'the details are open for every company');
+    const mine = await call(fixApi, { body: { ...ASHA, action: 'lookup' } });
+    assert(mine.json.companies.every((c) => c.details_complete === true), 'a student who used the new form has them filled');
+  });
+  await t('details: an accepted company is locked for links but its three details can be saved', async () => {
+    let r = await call(fixApi, { body: { ...ASHA, action: 'save', company: { position: 1, domain: 'Data Engineer', domainLink: JOBLINK } } });
+    assert.strictEqual(r.status, 409, 'links stay locked');
+    r = await call(fixApi, { body: { ...ASHA, action: 'details', company: { position: 1, ...DETAILS } } });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    const c = (await getDb().getStudentForFix('22ECEAD001', ASHA.email)).companies[0];
+    assert.deepStrictEqual([c.employee_strength, c.package_lpa, c.revenue_amount, c.revenue_unit, c.revenue_currency], ['1,001-5,000', 7.2, 1250, 'Million', 'USD']);
+    assert.strictEqual(c.review_status, 'accepted', 'still accepted');
+    assert.strictEqual(c.domain_link, 'https://example.com/careers/data-engineer-fresher', 'links untouched');
+    const look = await call(fixApi, { body: { ...ASHA, action: 'lookup' } });
+    assert.strictEqual(look.json.companies[0].details_complete, true);
+  });
+  await t('details: every field is compulsory, with no "not available" way out', async () => {
+    for (const bad of [{ strength: '' }, { packageLpa: '' }, { packageLpa: 'n/a' }, { revenueAmount: '' }, { revenueAmount: 'not available' }, { revenueUnit: '' }, { revenueCurrency: '' }]) {
+      const r = await call(fixApi, { body: { ...ASHA, action: 'details', company: { position: 2, ...DETAILS, ...bad } } });
+      assert.strictEqual(r.status, 400, JSON.stringify(bad) + ' should be refused');
+    }
+    const c = (await getDb().getStudentForFix('22ECEAD001', ASHA.email)).companies[1];
+    assert.deepStrictEqual([c.employee_strength, c.package_lpa], ['201-1,000', 6.5], 'nothing was changed');
+  });
+  await t('details: a wrong email is refused, and every save is kept in the history', async () => {
+    const r = await call(fixApi, { body: { roll: ASHA.roll, email: 'someone@else.com', action: 'details', company: { position: 2, ...DETAILS } } });
+    assert.strictEqual(r.status, 401);
+    const h = (await call(admin, { method: 'GET', query: { action: 'history', roll: ASHA.roll }, headers: { 'x-admin-password': 'secret-test-pw' } })).json.history;
+    assert(h.some((x) => x.source === 'details' && x.position === 1 && x.employee_strength === '201-1,000' && x.package_lpa === 6.5), 'the values before the save are kept');
+  });
+  await t('details: links and details are saved together, and a half-filled set is refused', async () => {
+    let r = await call(fixApi, { body: { ...ASHA, action: 'save', company: { position: 3, domain: 'Data Engineer', domainLink: JOBLINK, strength: '51-200' } } });
+    assert.strictEqual(r.status, 400, 'only the strength was typed, the rest is missing');
+    assert(r.json.errors.pkg && r.json.errors.revenue, JSON.stringify(r.json.errors));
+    r = await call(fixApi, { body: { ...ASHA, action: 'save', company: { position: 3, domain: 'Data Engineer', domainLink: JOBLINK, ...DETAILS } } });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    const c = (await getDb().getStudentForFix('22ECEAD001', ASHA.email)).companies[2];
+    assert.deepStrictEqual([c.employee_strength, c.package_lpa, c.revenue_amount], ['1,001-5,000', 7.2, 1250]);
+    assert.strictEqual(c.domain_link, JOBLINK);
+  });
+  await t('company change is off by default: only the links and details can be edited', async () => {
+    delete process.env.ALLOW_COMPANY_CHANGE;
+    try {
+      const look = await call(fixApi, { body: { ...ASHA, action: 'lookup' } });
+      assert(look.json.companies.every((c) => c.editable.identity === false), 'no company can be replaced');
+      const before = (await getDb().getStudentForFix('22ECEAD001', ASHA.email)).companies[3].name;
+      const r = await call(fixApi, { body: { ...ASHA, action: 'save', company: { position: 4, domain: 'Data Engineer', domainLink: JOBLINK, name: 'Sneaky Replacement', website: 'sneaky-replacement.com' } } });
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.strictEqual((await getDb().getStudentForFix('22ECEAD001', ASHA.email)).companies[3].name, before, 'the company name did not change');
+    } finally { process.env.ALLOW_COMPANY_CHANGE = '1'; }
   });
   await t('fix: a careers page only warns, a real job link is saved and marked for re-check', async () => {
     let r = await call(fixApi, { body: { ...ASHA, action: 'check', company: { position: 2, domain: 'Data Engineer', domainLink: 'https://databricks.com/company/careers' } } });

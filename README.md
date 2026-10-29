@@ -35,7 +35,7 @@ Companies already on the college list are marked "already taken" for every stude
 
 ## Link rules (what the form accepts)
 - The domain-specific job link must point to **one specific job** (or be an email). The company home page, a general careers page, a list or search of jobs, a LinkedIn company page or post, and news/repost sites are refused with a clear message.
-- A student may fill the domain-specific field, the fresher hiring field, or both. Links that look wrong (careers page, home page, search page, a closed job) are not blocked: the form shows an orange warning that the entry may not be approved, and the entry is checked again afterwards. Only text that is not a link or an email is refused.
+- A student may fill the domain-specific field, the fresher hiring field, or both. Both need the link of one specific job, or an email; a careers page does not count in either. Links that look wrong (careers page, home page, search page, a closed job) are not blocked: the form shows an orange warning that the entry may not be approved, and the entry is checked again afterwards. Only text that is not a link or an email is refused.
 - Every change on the fix page saves the old values to `company_history`. The admin page's "Change history" lists them and can restore one (refused if its name or website has been taken meanwhile; the restore is itself recorded, so it can be undone).
 - On the fix page a company that is not accepted can be corrected or replaced by another company; the old company is released when the new one is saved, under the same uniqueness checks as a new submission.
 - A general careers or campus page is accepted only for a company the student marked **General (not domain specific)**.

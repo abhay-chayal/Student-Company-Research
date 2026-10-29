@@ -106,3 +106,10 @@ button.go:disabled { background:#b9bfc9; color:#f1efe8; cursor:not-allowed; }
   .bar .wrap { gap:12px; }
   button.go { padding:0 20px; }
 }
+.revrow { display:flex; gap:8px; flex-wrap:wrap; }
+.revrow input { flex:1 1 140px; min-width:0; }
+.revrow select { flex:0 0 130px; }
+.badge.need { background:var(--warnbg); color:var(--warn); border-color:#e7d9ae; }
+.sub-h { font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:6px 0 10px; }
+button.go.plain { background:var(--paper); color:var(--navy); border:1px solid var(--line2); margin-left:8px; }
+button.go.plain:hover:not(:disabled) { background:var(--tint); }

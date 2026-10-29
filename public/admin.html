@@ -23,7 +23,7 @@
   .stat b { font:700 1.35rem Georgia,serif; color:var(--navy); margin-right:6px; }
   .err { color:var(--bad); font-size:.9rem; }
   .scroll { overflow-x:auto; background:var(--paper); border:1px solid var(--line); border-radius:10px; }
-  table { border-collapse:collapse; width:100%; min-width:1380px; }
+  table { border-collapse:collapse; width:100%; min-width:1700px; }
   .st { display:inline-block; padding:2px 9px; border-radius:99px; font-size:.75rem; font-weight:600; background:#eee8d6; color:#5b6475; white-space:nowrap; }
   .st.accepted { background:#e8f4e8; color:#2f6b3f; } .st.to_fix { background:#fbeae6; color:#a63228; } .st.pending { background:#f7efd9; color:#7a5a14; } .st.resubmitted { background:#e6eefb; color:#1f4fa8; }
   th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:.88rem; word-break:break-word; }
@@ -92,6 +92,11 @@
         <div class="legend" id="legend"></div>
         <div id="barsStatus"></div>
       </div>
+      <div class="card">
+        <h2>Company details filled, by branch</h2>
+        <p class="hint">A company counts as filled when employee strength, fresher package and revenue are all given.</p>
+        <div id="barsDetails"></div>
+      </div>
       <p class="hint" id="dashStamp"></p>
     </div>
 
@@ -111,7 +116,7 @@
       <table>
         <thead><tr>
           <th>S.No</th><th>Student Name</th><th>RTU Roll No</th><th>Email ID</th><th>Company</th><th>Website</th><th>Domain</th>
-          <th>Domain-specific Link / Email</th><th>Fresher Hiring Link / Email</th><th>Review</th><th></th>
+          <th>Domain-specific Link / Email</th><th>Fresher Hiring Link / Email</th><th>Employee Strength</th><th>Package (LPA)</th><th>Revenue</th><th>Review</th><th></th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
@@ -200,6 +205,9 @@
           tr.appendChild(td(c.domain || '-'));
           tr.appendChild(linkCell(c.domain_link));
           tr.appendChild(linkCell(c.general_link));
+          tr.appendChild(td(c.employee_strength || '-', c.employee_strength ? '' : 'na'));
+          tr.appendChild(td(c.package_lpa == null ? '-' : String(c.package_lpa), c.package_lpa == null ? 'na' : 'nw'));
+          tr.appendChild(td(c.revenue_amount == null ? '-' : c.revenue_amount + ' ' + c.revenue_unit + ' ' + c.revenue_currency, c.revenue_amount == null ? 'na' : 'nw'));
           var rv = document.createElement('td'); var tag = document.createElement('span');
           var st = c.review_status || 'new'; tag.className = 'st ' + st;
           tag.textContent = { accepted: 'Accepted', to_fix: 'To fix', pending: 'Pending', resubmitted: 'Corrected', new: 'Not reviewed' }[st] || st;
@@ -252,12 +260,15 @@
   function renderDashboard(d) {
     if (!d) return;
     var groups = {};
-    BRANCHES.concat([['OT', 'Other']]).forEach(function (b) { groups[b[0]] = { label: b[1], students: 0, companies: 0, status: {} }; });
+    BRANCHES.concat([['OT', 'Other']]).forEach(function (b) { groups[b[0]] = { label: b[1], students: 0, companies: 0, status: {}, filled: 0, fullStudents: 0 }; });
     d.students.forEach(function (s) {
       var g = groups[branchOf(s.roll_no)];
       g.students++;
+      var all = s.companies.length > 0;
       s.companies.forEach(function (c) {
         g.companies++;
+        var done = !!(c.employee_strength && c.package_lpa != null && c.revenue_amount != null && c.revenue_unit && c.revenue_currency);
+        if (done) g.filled++; else all = false;
         var st = c.review_status || 'new';
         g.status[st] = (g.status[st] || 0) + 1;
       });
@@ -275,6 +286,19 @@
       if (g.students) seg(b.track, 'sub', g.students / max * 100, String(g.students), g.label + ': ' + g.students + ' students');
       else { var z = document.createElement('div'); z.style.cssText = 'padding:0 10px;line-height:30px;color:#6d675b;font-size:.82rem'; z.textContent = '0'; b.track.appendChild(z); }
       box.appendChild(b.row);
+    });
+
+    // students with every one of their companies filled are counted too
+    d.students.forEach(function (s) {
+      var full = s.companies.length > 0 && s.companies.every(function (c) { return c.employee_strength && c.package_lpa != null && c.revenue_amount != null && c.revenue_unit && c.revenue_currency; });
+      if (full) groups[branchOf(s.roll_no)].fullStudents++;
+    });
+    var db = $('#barsDetails'); db.textContent = '';
+    order.forEach(function (k) {
+      var g = groups[k], b = bar(g.label, g.fullStudents + ' of ' + g.students + ' students complete');
+      seg(b.track, 'accepted', g.companies ? g.filled / g.companies * 100 : 0, g.filled >= 3 ? String(g.filled) : '', 'Filled: ' + g.filled + ' of ' + g.companies + ' companies');
+      seg(b.track, 'new', g.companies ? (g.companies - g.filled) / g.companies * 100 : 0, g.companies - g.filled >= 3 ? String(g.companies - g.filled) : '', 'Still to fill: ' + (g.companies - g.filled) + ' of ' + g.companies + ' companies');
+      db.appendChild(b.row);
     });
 
     var lg = $('#legend'); lg.textContent = '';

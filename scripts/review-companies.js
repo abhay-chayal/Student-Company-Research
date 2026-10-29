@@ -343,8 +343,9 @@ function judgeFinal(r, ctx) {
     if (pageKinds.includes(v.v)) return related ? 'ok-page' : 'other-company';
     return 'bad';
   };
-  out.d = judge(r.dlink, general ? [V.CAREERS] : []);
-  out.f = judge(r.flink, [V.CAREERS, V.LISTING]);
+  // Both fields need a specific job link or an email: a careers page or a job list no longer counts in either.
+  out.d = judge(r.dlink, []);
+  out.f = judge(r.flink, []);
   out.website = website;
   // A student may fill either column or both: one correct column is enough.
   out.approved = website !== 'mismatch' && (out.d.startsWith('ok') || out.f.startsWith('ok'));
@@ -395,14 +396,14 @@ async function stageFinal(rows) {
       try { fs.closeSync(fs.openSync(p, 'a')); return p; } catch (e) { if (e.code !== 'EBUSY' && e.code !== 'EPERM') throw e; }
     }
   };
-  const xlsxPath = target('FEC-28-final-list', 'xlsx');
+  const xlsxPath = target('FEC-28-final-list-strict', 'xlsx');
   await out.xlsx.writeFile(xlsxPath);
   console.log('wrote', xlsxPath);
 
   const q = (v) => '"' + String(v).replace(/"/g, '""') + '"';
   const csv = [['S.No', 'RTU Roll No', 'Student Name', 'Company', 'Approved / Not approved']].concat(rows.map((r, i) => [i + 1, r.roll, r.name, r.company, label(r)]));
-  fs.writeFileSync(target('FEC-28-final-list', 'csv'),'﻿' + csv.map((x) => x.map(q).join(',')).join('\r\n'));
-  writeJson('final-results.json', rows.map((r) => ({ roll: r.roll, name: r.name, company: r.company, name_key: nameKey(r.company).key, status: r.fin.approved ? STATUS.ACCEPTED : STATUS.REDO, reason: '', d: r.fin.d, f: r.fin.f, website: r.fin.website })));
+  fs.writeFileSync(target('FEC-28-final-list-strict', 'csv'),'﻿' + csv.map((x) => x.map(q).join(',')).join('\r\n'));
+  writeJson('final-results-strict.json', rows.map((r) => ({ roll: r.roll, name: r.name, company: r.company, name_key: nameKey(r.company).key, status: r.fin.approved ? STATUS.ACCEPTED : STATUS.REDO, reason: '', d: r.fin.d, f: r.fin.f, website: r.fin.website })));
 
   const tally = {};
   for (const r of rows) { const k = `D:${r.fin.d.padEnd(14)} F:${r.fin.f}`; tally[k] = (tally[k] || 0) + 1; }

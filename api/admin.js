@@ -42,8 +42,11 @@ function csvCell(value) {
 
 const HEADER = [
   'S.No', 'Student Name', 'RTU Roll No', 'Email ID', 'Company', 'Website', 'Domain',
-  'Domain-specific Link / Email', 'Fresher Hiring Link / Email', 'Review',
+  'Domain-specific Link / Email', 'Fresher Hiring Link / Email',
+  'Employee Strength', 'Fresher Package (LPA)', 'Revenue', 'Review',
 ];
+
+const revenueText = (c) => (c.revenue_amount == null || !c.revenue_unit ? '' : `${Number(c.revenue_amount)} ${c.revenue_unit} ${c.revenue_currency || ''}`.trim());
 
 const REVIEW_LABEL = { new: 'Not reviewed', accepted: 'Accepted', to_fix: 'To fix', pending: 'Pending decision', resubmitted: 'Corrected, to re-check' };
 const REVIEW_STATUSES = new Set(Object.keys(REVIEW_LABEL));
@@ -64,7 +67,8 @@ function companyRows(students) {
     s.companies.forEach((c) => {
       rows.push({
         student: idx,
-        cells: [idx + 1, s.name, s.roll_no, s.email || '', c.name, c.website, c.domain || '', c.domain_link || '', c.general_link || '', REVIEW_LABEL[c.review_status] || REVIEW_LABEL.new],
+        cells: [idx + 1, s.name, s.roll_no, s.email || '', c.name, c.website, c.domain || '', c.domain_link || '', c.general_link || '',
+          c.employee_strength || '', c.package_lpa == null ? '' : Number(c.package_lpa), revenueText(c), REVIEW_LABEL[c.review_status] || REVIEW_LABEL.new],
       });
     });
   });
@@ -101,6 +105,11 @@ module.exports = async (req, res) => {
             domain: c.domain,
             domain_link: c.domain_link,
             general_link: c.general_link,
+            employee_strength: c.employee_strength || '',
+            package_lpa: c.package_lpa == null ? null : Number(c.package_lpa),
+            revenue_amount: c.revenue_amount == null ? null : Number(c.revenue_amount),
+            revenue_unit: c.revenue_unit || '',
+            revenue_currency: c.revenue_currency || '',
             review_status: c.review_status || 'new',
             review_note: c.review_note || '',
           })),
@@ -167,7 +176,7 @@ module.exports = async (req, res) => {
 
       // Sheet 1: one row per company, student columns repeated.
       const sheet = book.addWorksheet('Student Research', { views: [{ state: 'frozen', ySplit: 1 }] });
-      sheet.columns = [8, 24, 18, 30, 28, 26, 26, 42, 42, 22].map((width) => ({ width }));
+      sheet.columns = [8, 24, 18, 30, 28, 26, 26, 42, 42, 18, 14, 22, 22].map((width) => ({ width }));
       const head = sheet.addRow(HEADER);
       head.height = 30;
       head.eachCell((cell) => {
@@ -192,7 +201,7 @@ module.exports = async (req, res) => {
           }
         });
       });
-      sheet.autoFilter = { from: 'A1', to: 'J1' };
+      sheet.autoFilter = { from: 'A1', to: 'M1' };
 
       // Sheet 2: every company A to Z, handy for checking nothing repeats.
       const flat = book.addWorksheet('All companies A-Z', { views: [{ state: 'frozen', ySplit: 1 }] });
