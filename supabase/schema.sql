@@ -148,6 +148,27 @@ alter table companies add column if not exists review_status text not null defau
 alter table companies add column if not exists review_note   text not null default '';
 alter table companies add column if not exists fixed_at      timestamptz;
 
+-- Mentor panel: a person checks every company and approves it or not.
+-- mentor_decision: null = no mentor has looked yet | approved | not_approved
+alter table companies add column if not exists mentor_decision text;
+alter table companies add column if not exists mentor_note     text not null default '';
+alter table companies add column if not exists mentor_name     text not null default '';
+alter table companies add column if not exists mentor_at       timestamptz;
+
+-- Who decided what, and when. Nothing here is ever deleted, so a wrong click can be traced and undone.
+create table if not exists mentor_log (
+  id              bigserial primary key,
+  at              timestamptz not null default now(),
+  mentor_name     text not null,
+  roll_key        text not null,
+  position        smallint not null,
+  company_name    text not null,
+  decision        text not null,
+  note            text not null default '',
+  previous_status text not null default ''
+);
+alter table mentor_log enable row level security;
+
 -- History of every change a student makes on the fix page: the values the company had BEFORE the
 -- change. The admin can look at it and restore an old version (see restore_company).
 create table if not exists company_history (
@@ -252,6 +273,7 @@ begin
             v_company.domain, v_company.domain_link, v_company.general_link, v_company.review_status, v_company.review_note,
             v_company.employee_strength, v_company.package_lpa, v_company.revenue_amount, v_company.revenue_unit, v_company.revenue_currency);
     update companies set
+      mentor_decision   = null,
       employee_strength = coalesce(p_extras->>'employee_strength', employee_strength),
       package_lpa       = coalesce((p_extras->>'package_lpa')::numeric, package_lpa),
       revenue_amount    = coalesce((p_extras->>'revenue_amount')::numeric, revenue_amount),
@@ -299,11 +321,53 @@ begin
           v_company.domain, v_company.domain_link, v_company.general_link, v_company.review_status, v_company.review_note,
           v_company.employee_strength, v_company.package_lpa, v_company.revenue_amount, v_company.revenue_unit, v_company.revenue_currency);
   update companies set
+    mentor_decision   = null,
     employee_strength = p_extras->>'employee_strength',
     package_lpa       = (p_extras->>'package_lpa')::numeric,
     revenue_amount    = (p_extras->>'revenue_amount')::numeric,
     revenue_unit      = p_extras->>'revenue_unit',
     revenue_currency  = p_extras->>'revenue_currency'
+  where id = v_company.id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- A mentor approves or does not approve one company. Approving makes it Accepted (locked for the student);
+-- not approving makes it "To fix" with the mentor's reason, which the student reads on the fix page.
+create or replace function mentor_decide(
+  p_roll_key text, p_position integer, p_decision text, p_note text, p_mentor text
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student students%rowtype;
+  v_company companies%rowtype;
+  v_note    text := left(btrim(coalesce(p_note, '')), 300);
+  v_mentor  text := left(btrim(coalesce(p_mentor, '')), 40);
+begin
+  if p_decision not in ('approved', 'not_approved') then return jsonb_build_object('ok', false, 'code', 'decision'); end if;
+  if length(v_mentor) < 2 then return jsonb_build_object('ok', false, 'code', 'mentor'); end if;
+  if p_decision = 'not_approved' and length(v_note) < 3 then return jsonb_build_object('ok', false, 'code', 'note'); end if;
+
+  perform pg_advisory_xact_lock(7001);
+  select * into v_student from students where roll_key = p_roll_key;
+  if not found then return jsonb_build_object('ok', false, 'code', 'missing'); end if;
+  select * into v_company from companies where student_id = v_student.id and position = p_position;
+  if not found then return jsonb_build_object('ok', false, 'code', 'missing'); end if;
+  if p_decision = 'approved' and not (v_company.employee_strength <> '' and v_company.package_lpa is not null
+       and v_company.revenue_amount is not null and v_company.revenue_unit <> '' and v_company.revenue_currency <> '') then
+    return jsonb_build_object('ok', false, 'code', 'details');
+  end if;
+
+  insert into mentor_log (mentor_name, roll_key, position, company_name, decision, note, previous_status)
+  values (v_mentor, v_student.roll_key, v_company.position, v_company.name, p_decision, case when p_decision = 'approved' then '' else v_note end, v_company.review_status);
+
+  update companies set
+    mentor_decision = p_decision,
+    mentor_note     = case when p_decision = 'approved' then '' else v_note end,
+    mentor_name     = v_mentor,
+    mentor_at       = now(),
+    review_status   = case when p_decision = 'approved' then 'accepted' else 'to_fix' end,
+    review_note     = case when p_decision = 'approved' then '' else v_note end
   where id = v_company.id;
   return jsonb_build_object('ok', true);
 end;
@@ -368,6 +432,8 @@ $$;
 
 revoke all on function apply_review(jsonb) from public, anon, authenticated;
 grant execute on function apply_review(jsonb) to service_role;
+revoke all on function mentor_decide(text, integer, text, text, text) from public, anon, authenticated;
+grant execute on function mentor_decide(text, integer, text, text, text) to service_role;
 revoke all on function save_details(text, text, integer, jsonb) from public, anon, authenticated;
 grant execute on function save_details(text, text, integer, jsonb) to service_role;
 revoke all on function restore_company(bigint) from public, anon, authenticated;

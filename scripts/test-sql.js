@@ -222,6 +222,35 @@ const five = (names, extra) => names.map((n) => company(n, null, extra));
       assert.strictEqual(g.ok, true);
       assert.strictEqual((await q("select employee_strength from companies where name_key = 'detailbravo'")).rows[0].employee_strength, '10,000+');
     });
+    await t('mentor: approve and not approve are recorded, need a name, a reason and the three details, and a student change sends it back', async () => {
+      const item = (n, full = true) => ({ name: n, name_key: n.toLowerCase().replace(/[^a-z]/g, ''), website: n.toLowerCase().replace(/[^a-z]/g, '') + '.com', domain_key: n.toLowerCase().replace(/[^a-z]/g, '') + 'mk', domain: 'Data Engineer', domain_link: 'hr@x.com', general_link: '',
+        ...(full ? { employee_strength: '51-200', package_lpa: 5.5, revenue_amount: 120.5, revenue_unit: 'Crore', revenue_currency: 'INR' } : {}) });
+      const r = await submit('22MEN00001', 'men@x.com', [item('Mentor One'), item('Mentor Two'), item('Mentor Three'), item('Mentor Four'), item('Mentor Five', false)]);
+      assert.strictEqual(r.ok, true, JSON.stringify(r));
+      const md = async (pos, decision, note, who) => (await q('select mentor_decide($1,$2,$3,$4,$5) r', ['22MEN00001', pos, decision, note, who])).rows[0].r;
+      assert.strictEqual((await md(1, 'maybe', '', 'Dr Rao')).code, 'decision');
+      assert.strictEqual((await md(1, 'approved', '', '')).code, 'mentor');
+      assert.strictEqual((await md(1, 'not_approved', 'no', 'Dr Rao')).code, 'note', 'a reason of at least 3 characters');
+      assert.strictEqual((await md(5, 'approved', '', 'Dr Rao')).code, 'details', 'details missing: cannot be approved');
+      assert.strictEqual((await md(9, 'approved', '', 'Dr Rao')).code, 'missing');
+      assert.strictEqual((await q("select mentor_decide('NOSUCH',1,'approved','','Dr Rao') r")).rows[0].r.code, 'missing');
+      assert.strictEqual((await md(1, 'approved', '', 'Dr Rao')).ok, true);
+      assert.strictEqual((await md(2, 'not_approved', 'Careers page, give one job link', 'Prof Sen')).ok, true);
+      let rows = (await q("select position, mentor_decision, review_status, review_note, mentor_name from companies c join students s on s.id = c.student_id where s.roll_key = '22MEN00001' order by position")).rows;
+      assert.deepStrictEqual([rows[0].mentor_decision, rows[0].review_status, rows[0].mentor_name], ['approved', 'accepted', 'Dr Rao']);
+      assert.deepStrictEqual([rows[1].mentor_decision, rows[1].review_status, rows[1].review_note, rows[1].mentor_name], ['not_approved', 'to_fix', 'Careers page, give one job link', 'Prof Sen']);
+      assert.strictEqual(rows[2].mentor_decision, null, 'not looked at yet');
+      const log = (await q("select mentor_name, decision, company_name, previous_status from mentor_log where roll_key = '22MEN00001' order by id")).rows;
+      assert.deepStrictEqual(log.map((x) => [x.mentor_name, x.decision, x.company_name]), [['Dr Rao', 'approved', 'Mentor One'], ['Prof Sen', 'not_approved', 'Mentor Two']]);
+      // the student changes the details of an approved company: it goes back to the mentor
+      await q("select save_details('22MEN00001','men@x.com',1,'{\"employee_strength\":\"1-50\",\"package_lpa\":4,\"revenue_amount\":2,\"revenue_unit\":\"Crore\",\"revenue_currency\":\"INR\"}'::jsonb)");
+      rows = (await q("select mentor_decision, review_status from companies c join students s on s.id = c.student_id where s.roll_key = '22MEN00001' and c.position = 1")).rows;
+      assert.deepStrictEqual([rows[0].mentor_decision, rows[0].review_status], [null, 'accepted']);
+      // the student fixes the not-approved company: it goes back to the mentor too
+      await q("select fix_company('22MEN00001','men@x.com',2,'Data Engineer','https://mentortwo.com/jobs/12345','')");
+      rows = (await q("select mentor_decision, review_status from companies c join students s on s.id = c.student_id where s.roll_key = '22MEN00001' and c.position = 2")).rows;
+      assert.deepStrictEqual([rows[0].mentor_decision, rows[0].review_status], [null, 'resubmitted']);
+    });
     await t('fix: 25 students claim the same new website at once - exactly one wins', async () => {
       const tasks = [];
       for (let i = 0; i < 25; i++) {
@@ -241,7 +270,7 @@ const five = (names, extra) => names.map((n) => company(n, null, extra));
       const c = new Client(conn);
       await c.connect();
       try {
-        for (const sql of ['select * from students', 'select * from companies', 'select * from reserved_companies', 'select * from company_history', 'select restore_company(1)', "select save_details('X','x@x.com',1,'{}'::jsonb)",
+        for (const sql of ['select * from students', 'select * from companies', 'select * from reserved_companies', 'select * from company_history', 'select restore_company(1)', "select mentor_decide('X',1,'approved','','Dr')", 'select * from mentor_log', "select save_details('X','x@x.com',1,'{}'::jsonb)",
           "select submit_entry('X','X','X','x@x.com','[]'::jsonb)", "select fix_company('X','x@x.com',1,'d','','')", "select apply_review('[]'::jsonb)"]) {
           await c.query('set role anon');
           await assert.rejects(c.query(sql), /permission denied/i, 'anon must not run: ' + sql);

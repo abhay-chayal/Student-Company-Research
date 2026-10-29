@@ -16,6 +16,7 @@ const routes = {
   '/api/submit': require('../api/submit'),
   '/api/fix': require('../api/fix'),
   '/api/admin': require('../api/admin'),
+  '/api/mentor': require('../api/mentor'),
 };
 
 http.createServer((req, res) => {
@@ -35,6 +36,7 @@ http.createServer((req, res) => {
   let file = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
   if (file === '/admin') file = '/admin.html';
   if (file === '/fix') file = '/fix.html';
+  if (file === '/mentor') file = '/mentor.html';
   const full = path.join(ROOT, 'public', path.normalize(file));
   if (!full.startsWith(path.join(ROOT, 'public')) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
     res.statusCode = 404;

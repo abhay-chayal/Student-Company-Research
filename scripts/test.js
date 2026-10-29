@@ -3,6 +3,7 @@ process.env.SKIP_DNS = '1';
 process.env.SKIP_LINK_LIVE = '1';
 delete process.env.SUPABASE_URL;
 process.env.ADMIN_PASSWORD = 'secret-test-pw';
+process.env.MENTOR_PASSWORD = 'mentor-test-pw';
 process.env.ALLOW_COMPANY_CHANGE = '1'; // for the tests that replace a company; one test below turns it off
 const assert = require('assert');
 const { nameKey, coreKey, websiteKey, rollNumber, emailAddress, hiringLink, domainText } = require('../lib/normalize');
@@ -488,6 +489,74 @@ const EMAIL = 'student@gmail.com';
     const c = (await getDb().getStudentForFix('22ECEAD001', ASHA.email)).companies[2];
     assert.deepStrictEqual([c.employee_strength, c.package_lpa, c.revenue_amount], ['1,001-5,000', 7.2, 1250]);
     assert.strictEqual(c.domain_link, JOBLINK);
+  });
+  // ---- mentor panel ----
+  const mentorApi = require('../api/mentor');
+  const mcall = (action, { method = 'GET', query = {}, body = {}, password = 'mentor-test-pw' } = {}) =>
+    call(mentorApi, { method, query: { action, ...query }, body, headers: { 'x-mentor-password': password } });
+  const decide = (o) => mcall('decide', { method: 'POST', body: { roll: 'MEN2600001', mentor: 'Dr Rao', ...o } });
+  await t('mentor: needs the mentor password, and the admin password does not open it', async () => {
+    assert.strictEqual((await mcall('list', { password: 'wrong' })).status, 401);
+    assert.strictEqual((await mcall('list', { password: 'secret-test-pw' })).status, 401, 'the admin password is not the mentor password');
+    assert.strictEqual((await call(mentorApi, { query: { action: 'list' } })).status, 401, 'no password at all');
+  });
+  await t('mentor: sees roll numbers and company data, never names or emails', async () => {
+    const co2 = (n) => ({ name: n, name_key: key(n), website: slug(n) + '.com', domain_key: slug(n) + 'mm', domain: 'Data Engineer', domain_link: JOBLINK, general_link: '',
+      employee_strength: '51-200', package_lpa: 5, revenue_amount: 10, revenue_unit: 'Crore', revenue_currency: 'INR' });
+    const names = ['Mentor Alpha', 'Mentor Bravo', 'Mentor Charlie', 'Mentor Delta'].map(co2);
+    names.push({ ...co2('Mentor Echo'), employee_strength: '', package_lpa: null, revenue_amount: null, revenue_unit: '', revenue_currency: '' }); // details missing
+    const made = await getDb().submit({ rollNo: 'MEN2600001', rollKey: 'MEN2600001', name: 'Secret Studentname', email: 'secret.student@private.org', companies: names });
+    assert.strictEqual(made.ok, true, JSON.stringify(made));
+    const list = await mcall('list');
+    assert.strictEqual(list.status, 200);
+    assert(list.json.students.some((x) => x.roll_no === 'MEN2600001' && x.count === 5 && x.unchecked === 5));
+    assert(list.json.branches.some((b) => b.code === 'AD' && b.label === 'AI & DS'));
+    const one = await mcall('student', { query: { roll: 'men2600001' } });
+    assert.strictEqual(one.status, 200);
+    assert.strictEqual(one.json.companies.length, 5);
+    assert.strictEqual(one.json.companies[0].employee_strength, '51-200');
+    for (const text of [list.text, one.text]) assert(!/Secret Studentname|secret\.student@private\.org/i.test(text), 'a name or email leaked');
+    assert.strictEqual(one.json.companies[4].details_complete, false);
+  });
+  await t('mentor: approve makes a company Accepted; not approve needs a reason the student then reads', async () => {
+    assert.strictEqual((await decide({ position: 1, decision: 'approved', mentor: '' })).status, 400, 'a mentor name is needed');
+    assert.strictEqual((await decide({ position: 2, decision: 'not_approved' })).status, 400, 'a reason is needed');
+    assert.strictEqual((await decide({ position: 5, decision: 'approved' })).status, 400, 'details missing: cannot be approved');
+    assert.strictEqual((await decide({ position: 9, decision: 'approved' })).status, 404);
+    assert.strictEqual((await decide({ position: 1, decision: 'approved' })).status, 200);
+    assert.strictEqual((await decide({ position: 2, decision: 'not_approved', note: 'Careers page. Give the link of one specific job.' })).status, 200);
+    const one = (await mcall('student', { query: { roll: 'MEN2600001' } })).json.companies;
+    assert.deepStrictEqual([one[0].mentor_decision, one[0].review_status, one[0].mentor_name], ['approved', 'accepted', 'Dr Rao']);
+    assert.deepStrictEqual([one[1].mentor_decision, one[1].review_status, one[1].mentor_note], ['not_approved', 'to_fix', 'Careers page. Give the link of one specific job.']);
+    const mine = await call(fixApi, { body: { roll: 'MEN2600001', email: 'secret.student@private.org', action: 'lookup' } });
+    assert.strictEqual(mine.json.companies[0].editable.links, false, 'an approved company is locked for the student');
+    assert(/specific job/.test(mine.json.companies[1].review_note), 'the student reads the mentor reason');
+    const list = (await mcall('list')).json.students.find((x) => x.roll_no === 'MEN2600001');
+    assert.deepStrictEqual([list.approved, list.not_approved, list.unchecked], [1, 1, 3]);
+    const log = (await mcall('log')).json.log;
+    assert(log.length >= 2 && log.some((x) => x.mentor_name === 'Dr Rao' && x.decision === 'not_approved' && x.company_name === 'Mentor Bravo'), 'every decision is recorded');
+  });
+  await t('mentor: "approve all" only touches companies nobody decided yet, and skips those with missing details', async () => {
+    const r = await mcall('decide_all', { method: 'POST', body: { roll: 'MEN2600001', mentor: 'Dr Rao' } });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.approved, 2, 'companies 3 and 4 were still open');
+    assert.deepStrictEqual(r.json.skipped.map((x) => x.position + ':' + x.reason), ['1:already decided', '2:already decided', '5:details not filled']);
+    const c = (await mcall('student', { query: { roll: 'MEN2600001' } })).json.companies;
+    assert.strictEqual(c[1].mentor_decision, 'not_approved', 'the rejected company stays rejected');
+  });
+  await t('mentor: a change by the student sends the company back to the mentor', async () => {
+    // the approved company 3: the student edits its three details
+    let r = await call(fixApi, { body: { roll: 'MEN2600001', email: 'secret.student@private.org', action: 'details', company: { position: 3, ...DETAILS } } });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    let c = (await mcall('student', { query: { roll: 'MEN2600001' } })).json.companies[2];
+    assert.strictEqual(c.mentor_decision, null, 'the mentor must look again');
+    assert.strictEqual(c.review_status, 'accepted');
+    // a company that was not approved: the student fixes it and saves
+    await decide({ position: 4, decision: 'not_approved', note: 'Closed job. Give a current one.' });
+    r = await call(fixApi, { body: { roll: 'MEN2600001', email: 'secret.student@private.org', action: 'save', company: { position: 4, domain: 'Data Engineer', domainLink: JOBLINK + '?x=1' } } });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    c = (await mcall('student', { query: { roll: 'MEN2600001' } })).json.companies[3];
+    assert.deepStrictEqual([c.mentor_decision, c.review_status], [null, 'resubmitted']);
   });
   await t('company change is off by default: only the links and details can be edited', async () => {
     delete process.env.ALLOW_COMPANY_CHANGE;

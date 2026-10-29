@@ -12,6 +12,10 @@
     {
       "source": "/fix",
       "destination": "/fix.html"
+    },
+    {
+      "source": "/mentor",
+      "destination": "/mentor.html"
     }
   ],
   "installCommand": "npm install --omit=dev"
