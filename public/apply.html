@@ -124,7 +124,7 @@
     if (c.employee_strength) el('span', { textContent: 'Employees: ' + c.employee_strength }, meta);
     var site = hrefOf(/^https?:/i.test(c.website) ? c.website : (c.website ? 'https://' + c.website : ''));
     if (site) { var a = el('a', { href: site, target: '_blank', rel: 'noopener noreferrer', textContent: c.website.replace(/^https?:\/\//i, '').replace(/\/$/, '') }, meta); a.style.color = 'var(--navy2)'; }
-    el('div', { className: 'by', textContent: 'Found by ' + c.student_name + ' (' + c.roll_no + ')' }, box);
+    el('div', { className: 'by', textContent: 'Submitted by ' + c.student_name + ' (' + c.roll_no + ')' }, box);
 
     var info = el('div', { className: 'info' }, box);
     var note = el('div', { className: 'by' }, box);
