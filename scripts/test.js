@@ -668,9 +668,12 @@ const EMAIL = 'student@gmail.com';
     r = await adminCall('apply_unpublish', { date: '2099-01-02' });
     assert.strictEqual(r.status, 200, JSON.stringify(r.json));
     assert.strictEqual((await acall('batches', {}, 'GET')).json.batches.some((b) => b.date === '2099-01-02'), false);
-    const again = await adminCall('apply_publish', { date: '2099-01-02' });
-    assert.strictEqual(again.status, 200, JSON.stringify(again.json));
-    assert.deepStrictEqual([again.json.branch], ['IT'], 'the freed students come up again');
+    const again = await publishNext(getDb(), { date: '2099-01-02', source: 'auto' });
+    assert.deepStrictEqual([again.ok, again.branch], [true, 'IT'], 'the freed students come up again');
+    const twice = await adminCall('apply_publish', {});
+    assert.strictEqual(twice.status, 409, 'a second admin cannot publish again on the same day: ' + JSON.stringify(twice.json));
+    assert.strictEqual((await adminCall('apply_publish', { date: '2099-06-01' })).status, 409, 'a date typed in is ignored');
+    assert.strictEqual((await acall('batches', {}, 'GET')).json.batches.filter((b) => b.date === rollout.todayIST()).length, 1);
   });
   await t('company change is off by default: only the links and details can be edited', async () => {
     delete process.env.ALLOW_COMPANY_CHANGE;

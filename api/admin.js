@@ -168,10 +168,9 @@ module.exports = async (req, res) => {
       });
     }
     if (action === 'apply_publish' && req.method === 'POST') {
-      const body = readBody(req);
-      const date = body.date ? String(body.date) : todayIST();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return send(res, 400, { ok: false, message: 'Use a date like 2026-11-06.' });
-      const out = await publishNext(db, { date, source: 'manual' });
+      // Manual publishing is only ever for today, and only once: a second admin clicking again changes nothing.
+      const out = await publishNext(db, { date: todayIST(), source: 'manual' });
+      if (out.ok && out.existing) return send(res, 409, { ok: false, existing: true, message: "Today's companies are already published. Nothing more can be published today." });
       return send(res, out.ok ? 200 : 400, out.ok ? out : { ok: false, message: out.message || (out.code === 'already' ? 'One of these students was published before.' : 'Nothing to publish.') });
     }
     if (action === 'apply_unpublish' && req.method === 'POST') {
