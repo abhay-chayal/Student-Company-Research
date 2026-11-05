@@ -73,6 +73,7 @@
     <div class="tabs">
       <button id="tabList" class="tab on" type="button">Submissions</button>
       <button id="tabDash" class="tab" type="button">Dashboard</button>
+      <button id="tabApply" class="tab" type="button">Daily companies</button>
     </div>
 
     <div id="dashView" class="dash" hidden>
@@ -98,6 +99,34 @@
         <div id="barsDetails"></div>
       </div>
       <p class="hint" id="dashStamp"></p>
+    </div>
+
+    <div id="applyView" class="dash" style="max-width:1000px" hidden>
+      <div class="tot">
+        <div class="stat"><b id="aDaysN">0</b>days published</div>
+        <div class="stat"><b id="aCompaniesN">0</b>companies</div>
+        <div class="stat"><b id="aAppliedN">0</b>applications</div>
+        <div class="stat"><b id="aActiveN">0</b>students active</div>
+        <button id="aReload" class="plain" type="button">Refresh</button>
+        <button id="aXlsx" type="button">Download answers (Excel)</button>
+      </div>
+      <div class="card">
+        <h2>Publishing</h2>
+        <p class="hint">Every morning at 6:00 AM the next five students are published on their own (CS first, then IT, then AI &amp; DS, in roll-number order). You can also publish by hand.</p>
+        <p id="aNext" style="margin:0 0 12px"></p>
+        <div class="row" style="margin-bottom:6px">
+          <button id="aPublish" type="button">Publish the next five students now</button>
+          <input type="text" id="aDate" placeholder="Date, optional (2026-11-06)" style="width:230px">
+          <span class="err" id="aMsg"></span>
+        </div>
+        <div class="scroll" style="margin-top:12px"><table style="min-width:0"><thead><tr><th>Day</th><th>Branch</th><th>Students</th><th>Companies</th><th></th></tr></thead><tbody id="aDays"></tbody></table></div>
+      </div>
+      <h2 class="sub">Companies, by number of students who applied</h2>
+      <div class="scroll"><table style="min-width:0"><thead><tr><th>Company</th><th>Day</th><th>Opened</th><th>Applied</th><th>Could not apply</th><th>Not interested</th></tr></thead><tbody id="aCompanies"></tbody></table></div>
+      <p class="hint">Showing the top 40. The Excel file has every company.</p>
+      <h2 class="sub">Students, by number of applications</h2>
+      <div class="scroll"><table style="min-width:0"><thead><tr><th>Roll no</th><th>Student</th><th>Branch</th><th>Opened</th><th>Applied</th><th>Could not apply</th><th>Not interested</th></tr></thead><tbody id="aStudents"></tbody></table></div>
+      <p class="hint">Showing the top 40. The Excel file has every student.</p>
     </div>
 
     <div id="listView">
@@ -319,10 +348,40 @@
   }
 
   function showTab(name) {
-    var dash = name === 'dash';
-    $('#dashView').hidden = !dash; $('#listView').hidden = dash;
-    $('#tabDash').classList.toggle('on', dash); $('#tabList').classList.toggle('on', !dash);
+    var dash = name === 'dash', apply = name === 'apply';
+    $('#dashView').hidden = !dash; $('#applyView').hidden = !apply; $('#listView').hidden = dash || apply;
+    $('#tabDash').classList.toggle('on', dash); $('#tabApply').classList.toggle('on', apply); $('#tabList').classList.toggle('on', !dash && !apply);
+    if (apply) loadApply();
     try { sessionStorage.setItem('adminTab', name); } catch (e) { /* not available */ }
+  }
+
+  // ---- daily companies ----
+  function row(body, cells) {
+    var tr = document.createElement('tr');
+    cells.forEach(function (c) { var t = td(c.text == null ? c : c.text, c.cls); tr.appendChild(t); if (c.node) t.appendChild(c.node); });
+    body.appendChild(tr); return tr;
+  }
+  function loadApply() {
+    Promise.all([api('apply_status').then(function (r) { return r.json(); }), api('apply_stats').then(function (r) { return r.json(); })]).then(function (both) {
+      var st = both[0], stats = both[1];
+      $('#aDaysN').textContent = st.totals.days; $('#aCompaniesN').textContent = st.totals.published_companies;
+      $('#aAppliedN').textContent = st.totals.applied; $('#aActiveN').textContent = st.totals.students_active;
+      $('#aNext').textContent = st.next ? 'Next in line: ' + st.next.branch + ', students ' + st.next.students.join(', ') + '.' : 'Every student of CS, IT and AI & DS has been published.';
+      var days = $('#aDays'); days.textContent = '';
+      if (!st.days.length) row(days, [{ text: 'Nothing published yet.' }, '', '', '', '']);
+      st.days.forEach(function (d) {
+        var b = document.createElement('button'); b.className = 'danger'; b.textContent = 'Take back';
+        b.onclick = function () {
+          if (!confirm('Take back the batch of ' + d.date + '? Students will no longer see it.')) return;
+          api('apply_unpublish', { method: 'POST', body: { date: d.date } }).then(function (r) { return r.json(); }).then(function (x) { $('#aMsg').textContent = x.ok ? '' : (x.message || 'Could not take it back.'); loadApply(); });
+        };
+        row(days, [d.date + (d.date === st.today ? ' (today)' : ''), d.branch, d.students.join(', '), d.companies, { text: '', node: b }]);
+      });
+      var cb = $('#aCompanies'); cb.textContent = '';
+      stats.companies.slice(0, 40).forEach(function (c) { row(cb, [c.company, c.batch_date, c.opened, c.applied, c.could_not, c.not_interested]); });
+      var sb = $('#aStudents'); sb.textContent = '';
+      stats.students.slice(0, 40).forEach(function (x) { row(sb, [x.roll_no, x.name, x.branch, x.opened, x.applied, x.could_not, x.not_interested]); });
+    });
   }
 
   function loadHistory() {
@@ -372,6 +431,19 @@
   $('#reload').onclick = load;
   $('#tabList').onclick = function () { showTab('list'); };
   $('#tabDash').onclick = function () { showTab('dash'); };
+  $('#tabApply').onclick = function () { showTab('apply'); };
+  $('#aReload').onclick = loadApply;
+  $('#aXlsx').onclick = function () { download('apply_xlsx', 'apply-answers.xlsx'); };
+  $('#aPublish').onclick = function () {
+    var date = $('#aDate').value.trim(), btn = this;
+    if (!confirm('Publish the next five students' + (date ? ' for ' + date : ' for today') + '?')) return;
+    btn.disabled = true; $('#aMsg').textContent = '';
+    api('apply_publish', { method: 'POST', body: date ? { date: date } : {} }).then(function (r) { return r.json(); }).then(function (x) {
+      btn.disabled = false;
+      $('#aMsg').textContent = x.ok ? (x.existing ? 'That day was already published.' : 'Published ' + x.companies + ' companies.') : (x.message || 'Could not publish.');
+      loadApply();
+    });
+  };
   $('#dashReload').onclick = function () {
     var b = this; b.disabled = true; b.textContent = 'Refreshing...';
     var done = function () { b.disabled = false; b.textContent = 'Refresh'; };

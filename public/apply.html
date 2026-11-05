@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Companies to apply to</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  main.wrap { padding-bottom:70px; }
+  .lead { color:var(--muted); margin:0 0 14px; }
+  .me { display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:space-between; }
+  .me b { color:var(--navy); }
+  button.go { width:auto; height:42px; padding:0 22px; }
+  button.plain { height:34px; padding:0 14px; font:600 .85rem "Segoe UI",system-ui,sans-serif; color:var(--navy); background:var(--paper); border:1px solid var(--line2); border-radius:7px; cursor:pointer; }
+  .day { margin:22px 0 10px; }
+  .day h2 { margin:0; font-size:1.2rem; color:var(--navy); }
+  .day small { color:var(--muted); }
+  details.old { background:var(--paper); border:1px solid var(--line); border-radius:10px; margin-bottom:12px; }
+  details.old > summary { cursor:pointer; padding:14px 18px; font:700 1.02rem Georgia,serif; color:var(--navy); }
+  details.old > .inner { padding:0 14px 8px; }
+  .co { background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:16px 18px 14px; margin-bottom:12px; }
+  .co h3 { margin:0 0 6px; font:700 1.08rem Georgia,serif; color:var(--navy); overflow-wrap:anywhere; }
+  .co .meta { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:.86rem; color:var(--muted); margin-bottom:10px; }
+  .chip { display:inline-block; padding:2px 10px; border-radius:99px; background:var(--tint); border:1px solid var(--line); font-size:.78rem; color:var(--ink); }
+  .by { font-size:.84rem; color:var(--muted); margin-bottom:10px; }
+  .info { margin-bottom:12px; border:1px solid var(--line); border-radius:8px; background:var(--tint); }
+  .irow { display:flex; gap:6px 14px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--line); font-size:.9rem; }
+  .irow:last-child { border-bottom:0; }
+  .ilabel { flex:0 0 150px; color:var(--muted); font-weight:600; }
+  .ivalue { flex:1 1 200px; min-width:0; overflow-wrap:anywhere; color:var(--navy2); }
+  .info > .by { padding:8px 12px; margin:0; }
+  a.open { display:inline-block; padding:9px 16px; border-radius:7px; background:var(--navy); color:#fffaf0; text-decoration:none; font:600 .9rem "Segoe UI",system-ui,sans-serif; }
+  a.open:hover { background:var(--navy2); }
+  a.open.alt { background:var(--paper); color:var(--navy); border:1px solid var(--navy); }
+  .ask { border-top:1px solid var(--line); padding-top:10px; }
+  .ask .q { font-size:.84rem; color:var(--muted); margin-bottom:8px; }
+  .opts { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .opts button { min-height:46px; padding:6px 10px; font:600 .86rem "Segoe UI",system-ui,sans-serif; border-radius:7px; border:1px solid var(--line2); background:var(--paper); color:var(--ink); cursor:pointer; line-height:1.25; }
+  .opts button:hover:not(:disabled) { background:var(--tint); }
+  .opts button:disabled { background:#efece3; color:#a39c8c; cursor:not-allowed; }
+  .opts button.on { border-color:var(--navy); background:#e6eefb; color:var(--navy); }
+  .opts button.on.yes { border-color:var(--ok); background:var(--okbg); color:var(--ok); }
+  .why { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+  .why select { height:40px; flex:1 1 220px; }
+  .why input { height:40px; flex:1 1 200px; }
+  .saved { font-size:.82rem; color:var(--ok); margin-top:6px; min-height:1.2em; }
+  .saved.bad { color:var(--bad); }
+  .note { font-size:.88rem; background:var(--tint); border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin:0 0 12px; }
+  @media (max-width:560px) { .opts { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Foundation Course &nbsp;&middot;&nbsp; FEC-28</div>
+    <h1>Companies to apply to</h1>
+    <p>These companies are for every student. Visit each one, look for a role that suits you and apply. Then tell us how it went.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="meBox" class="card me"><div>Logged in as <b id="meName"></b></div><button class="plain" id="logout" type="button">Log out</button></div>
+
+  <div id="days"><p class="lead" id="loading">Loading the companies...</p></div>
+</main>
+
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var me = null;              // { roll, email, name }
+  var clicked = {};           // company_id -> true once a link was opened
+  var answers = {};           // company_id -> { response, reason, note }
+  var today = '';
+
+  function el(tag, props, parent) { var e = document.createElement(tag); Object.keys(props || {}).forEach(function (k) { e[k] = props[k]; }); if (parent) parent.appendChild(e); return e; }
+  function post(action, body) {
+    body = body || {};
+    if (me) { body.roll = me.roll; body.email = me.email; }
+    return fetch('/api/apply?action=' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); });
+  }
+  function save(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* not available */ } }
+  function load(key) { try { return localStorage.getItem(key) || ''; } catch (e) { return ''; } }
+  function forget() { try { localStorage.removeItem('applyRoll'); localStorage.removeItem('applyEmail'); } catch (e) { /* not available */ } }
+
+  // ---- login ----
+  function applyStatus(data) {
+    clicked = {}; answers = {};
+    (data.clicks || []).forEach(function (c) { clicked[c.company_id] = true; });
+    (data.responses || []).forEach(function (r) { answers[r.company_id] = { response: r.response, reason: r.reason, note: r.note }; });
+  }
+  function login(roll, email) {
+    me = { roll: roll, email: email, name: '' };
+    return post('status', {}).then(function (res) {
+      if (res.status !== 200) { me = null; return false; }
+      me.name = res.data.name || '';
+      applyStatus(res.data);
+      $('#meName').textContent = me.name || roll;
+      return true;
+    }).catch(function () { me = null; return null; });
+  }
+  function toLogin() { window.location.replace('/apply-login'); }
+  $('#logout').onclick = function () { forget(); toLogin(); };
+
+  // ---- the companies ----
+  function dayLabel(iso) {
+    var d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  function hrefOf(v) {
+    if (!v) return null;
+    if (/^https?:\/\//i.test(v)) return v;
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'mailto:' + v;
+    return null;
+  }
+
+  function card(parent, c) {
+    var box = el('div', { className: 'co' }, parent);
+    el('h3', { textContent: c.name }, box);
+    var meta = el('div', { className: 'meta' }, box);
+    if (c.domain) el('span', { className: 'chip', textContent: c.domain }, meta);
+    if (c.employee_strength) el('span', { textContent: 'Employees: ' + c.employee_strength }, meta);
+    var site = hrefOf(/^https?:/i.test(c.website) ? c.website : (c.website ? 'https://' + c.website : ''));
+    if (site) { var a = el('a', { href: site, target: '_blank', rel: 'noopener noreferrer', textContent: c.website.replace(/^https?:\/\//i, '').replace(/\/$/, '') }, meta); a.style.color = 'var(--navy2)'; }
+    el('div', { className: 'by', textContent: 'Found by ' + c.student_name + ' (' + c.roll_no + ')' }, box);
+
+    var info = el('div', { className: 'info' }, box);
+    var note = el('div', { className: 'by' }, box);
+    function addInfo(label, value, kind) {
+      if (!value) return;
+      var row = el('div', { className: 'irow' }, info);
+      el('span', { className: 'ilabel', textContent: label }, row);
+      var h = hrefOf(value);
+      if (!h) { el('span', { className: 'ivalue', textContent: value }, row); return; }
+      var isMail = h.indexOf('mailto:') === 0;
+      var a = el('a', { className: 'ivalue', href: h, textContent: isMail ? value : value.replace(/^https?:\/\//i, '') }, row);
+      if (!isMail) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+      a.addEventListener('click', function () {
+        post('click', { company_id: c.company_id, link: kind }).then(function (res) {
+          if (res.status === 200) { clicked[c.company_id] = true; refresh(); }
+          else note.textContent = res.data.message || 'Could not record that.';
+        });
+      });
+    }
+    var dom = hrefOf(c.domain_link) && hrefOf(c.domain_link).indexOf('mailto:') === 0;
+    var gen = hrefOf(c.general_link) && hrefOf(c.general_link).indexOf('mailto:') === 0;
+    addInfo(dom ? 'Email for ' + (c.domain || 'the role') : 'Job link' + (c.domain ? ' (' + c.domain + ')' : ''), c.domain_link, 'domain');
+    addInfo(gen ? 'Email for freshers' : 'Fresher link', c.general_link, 'fresher');
+    if (!c.domain_link && !c.general_link) el('div', { className: 'by', textContent: 'No link or email was given for this company.' }, info);
+
+    var ask = el('div', { className: 'ask' }, box);
+    var q = el('div', { className: 'q' }, ask);
+    var opts = el('div', { className: 'opts' }, ask);
+    var bYes = el('button', { type: 'button', className: 'yes', textContent: 'I have applied' }, opts);
+    var bNo = el('button', { type: 'button', textContent: 'I could not apply' }, opts);
+    var bSkip = el('button', { type: 'button', textContent: 'Not relevant to me, not interested' }, opts);
+    var why = el('div', { className: 'why' }, ask); why.hidden = true;
+    var sel = el('select', {}, why);
+    [['', 'Why could you not apply?'], ['link_not_working', 'The link is not working'], ['job_closed', 'The job is closed or expired'], ['no_relevant_opening', 'I could not find a relevant opening'], ['other', 'Another reason']].forEach(function (o) { el('option', { value: o[0], textContent: o[1] }, sel); });
+    var why2 = el('input', { type: 'text', maxLength: 200, placeholder: 'Anything to add? (optional)' }, why);
+    var saveWhy = el('button', { type: 'button', className: 'plain', textContent: 'Save' }, why);
+    var saved = el('div', { className: 'saved' }, ask);
+
+    function send(response, reason, text) {
+      saved.className = 'saved'; saved.textContent = 'Saving...';
+      post('respond', { company_id: c.company_id, response: response, reason: reason || '', note: text || '' }).then(function (res) {
+        if (res.status === 200) { answers[c.company_id] = { response: response, reason: reason || '', note: text || '' }; refresh(); }
+        else { saved.className = 'saved bad'; saved.textContent = res.data.message || 'Could not save.'; }
+      }).catch(function () { saved.className = 'saved bad'; saved.textContent = 'Could not reach the server.'; });
+    }
+    bYes.onclick = function () { send('applied'); };
+    bSkip.onclick = function () { send('not_interested'); };
+    bNo.onclick = function () { why.hidden = false; bNo.classList.add('on'); };
+    saveWhy.onclick = function () { if (!sel.value) { saved.className = 'saved bad'; saved.textContent = 'Choose the reason first.'; return; } send('could_not', sel.value, why2.value); };
+
+    function refresh() {
+      var open = !!(me && clicked[c.company_id]);
+      [bYes, bNo, bSkip].forEach(function (b) { b.disabled = !open; });
+      q.textContent = 'Find a relevant opening and apply, then tell us what happened.';
+      var a = answers[c.company_id];
+      bYes.classList.toggle('on', !!a && a.response === 'applied'); bYes.classList.toggle('yes', true);
+      bNo.classList.toggle('on', !!a && a.response === 'could_not');
+      bSkip.classList.toggle('on', !!a && a.response === 'not_interested');
+      if (a && a.response === 'could_not') { why.hidden = false; sel.value = a.reason; why2.value = a.note || ''; }
+      if (a) { saved.className = 'saved'; saved.textContent = 'Saved: ' + (a.response === 'applied' ? 'you applied' : a.response === 'could_not' ? 'you could not apply' : 'not interested') + '. You can change it.'; }
+    }
+    box.refresh = refresh;
+    refresh();
+    return box;
+  }
+
+  function render(data) {
+    var root = $('#days'); root.textContent = '';
+    if (!data || !data.batches.length) { el('p', { className: 'lead', textContent: 'No companies have been published yet. Please check again soon.' }, root); return; }
+    today = data.today;
+    data.batches.forEach(function (b, i) {
+      var isToday = b.date === data.today;
+      var wrap;
+      if (isToday || i === 0) {
+        wrap = el('div', {}, root);
+        var h = el('div', { className: 'day' }, wrap);
+        el('h2', { textContent: (isToday ? 'Today: ' : 'Latest: ') + dayLabel(b.date) }, h);
+        el('small', { textContent: b.companies.length + ' companies, for all students' }, h);
+      } else {
+        var d = el('details', { className: 'old' }, root);
+        el('summary', { textContent: dayLabel(b.date) + ' (' + b.companies.length + ' companies)' }, d);
+        wrap = el('div', { className: 'inner' }, d);
+      }
+      b.companies.forEach(function (c) { card(wrap, c); });
+    });
+  }
+
+  var roll = load('applyRoll'), email = load('applyEmail');
+  if (!roll || !email) { toLogin(); return; }
+  Promise.all([login(roll, email), fetch('/api/apply?action=batches').then(function (r) { return r.json(); })]).then(function (both) {
+    if (both[0] === false) { forget(); toLogin(); return; }
+    if (both[0] === null) { $('#days').textContent = 'Could not reach the server. Check your internet and try again.'; return; }
+    window.__data = both[1];
+    render(both[1]);
+  }).catch(function () { $('#days').textContent = 'Could not load the companies. Check your internet and try again.'; });
+})();
+</script>
+</body>
+</html>

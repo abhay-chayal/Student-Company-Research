@@ -16,7 +16,15 @@
     {
       "source": "/mentor",
       "destination": "/mentor.html"
-    }
+    },
+    {
+      "source": "/apply",
+      "destination": "/apply.html"
+    },
+    { "source": "/apply-login", "destination": "/apply-login.html" }
+  ],
+  "crons": [
+    { "path": "/api/publish-daily", "schedule": "30 0 * * *" }
   ],
   "installCommand": "npm install --omit=dev"
 }

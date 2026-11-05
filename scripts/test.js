@@ -4,6 +4,7 @@ process.env.SKIP_LINK_LIVE = '1';
 delete process.env.SUPABASE_URL;
 process.env.ADMIN_PASSWORD = 'secret-test-pw';
 process.env.MENTOR_PASSWORD = 'mentor-test-pw';
+process.env.CRON_SECRET = 'cron-test-secret';
 process.env.ALLOW_COMPANY_CHANGE = '1'; // for the tests that replace a company; one test below turns it off
 const assert = require('assert');
 const { nameKey, coreKey, websiteKey, rollNumber, emailAddress, hiringLink, domainText } = require('../lib/normalize');
@@ -557,6 +558,119 @@ const EMAIL = 'student@gmail.com';
     assert.strictEqual(r.status, 200, JSON.stringify(r.json));
     c = (await mcall('student', { query: { roll: 'MEN2600001' } })).json.companies[3];
     assert.deepStrictEqual([c.mentor_decision, c.review_status], [null, 'resubmitted']);
+  });
+  // ---- the daily "apply" page ----
+  const rollout = require('../lib/rollout');
+  await t('roll order: CS first, then IT, then AI & DS, five at a time, by roll number, never twice', () => {
+    const rolls = ['23EARCS010', '23EARCS002', '223EARCS113', '23EARCS001', '23EARCS003', '23EARCS004', '23EARCS005', '23EARCS006', '23EARIT002', '23EARIT001', '23EARAD002', '23EAREC001'];
+    let w = rollout.nextWindow(rolls, new Set());
+    assert.strictEqual(w.branch, 'CS');
+    assert.deepStrictEqual(w.rolls, ['23EARCS001', '23EARCS002', '23EARCS003', '23EARCS004', '23EARCS005']);
+    w = rollout.nextWindow(rolls, new Set(w.rolls));
+    assert.deepStrictEqual(w.rolls, ['23EARCS006', '23EARCS010', '223EARCS113'], 'the rest of CS, still in number order');
+    w = rollout.nextWindow(rolls, new Set(rolls.filter((r) => r.includes('EARCS'))));
+    assert.deepStrictEqual([w.branch, w.rolls], ['IT', ['23EARIT001', '23EARIT002']], 'IT starts only when CS is complete');
+    w = rollout.nextWindow(rolls, new Set(rolls.filter((r) => /EAR(CS|IT)/.test(r))));
+    assert.deepStrictEqual([w.branch, w.rolls], ['AD', ['23EARAD002']]);
+    assert.strictEqual(rollout.nextWindow(rolls, new Set(rolls.filter((r) => /EAR(CS|IT|AD)/.test(r)))), null, 'EC is not part of the rollout');
+    assert.strictEqual(rollout.numberOf('23EARADO50'), 50, 'a typo with the letter O still sorts as 50');
+    assert.strictEqual(rollout.todayIST(new Date('2026-11-05T19:00:00Z')), '2026-11-06', 'the day changes at midnight in India');
+    assert.strictEqual(rollout.todayIST(new Date('2026-11-05T10:00:00Z')), '2026-11-05');
+  });
+
+  const applyApi = require('../api/apply');
+  const cronApi = require('../api/publish-daily');
+  const { publishNext } = require('../lib/applybatch');
+  const mk = (roll, n) => ({ rollNo: roll, rollKey: roll, name: 'Apply Student ' + n, email: 'apply' + n + '@student.com', companies: [1, 2, 3, 4, 5].map((j) => {
+    const nm = 'Applyco' + n + 'x' + j;
+    return { name: nm, name_key: key(nm), website: nm.toLowerCase() + '.com', domain_key: 'dk' + nm.toLowerCase(), domain: 'Data Engineer', domain_link: JOBLINK, general_link: j === 5 ? '' : 'hr@' + nm.toLowerCase() + '.com',
+      employee_strength: '201-1,000', package_lpa: 6, revenue_amount: 100, revenue_unit: 'Crore', revenue_currency: 'INR', review_status: 'accepted' };
+  }) });
+  let batchCompanies = [];
+  const ME = { roll: '23EARCS001', email: 'apply1@student.com' };
+  const acall = (action, body, method = 'POST') => call(applyApi, { method, query: { action }, body });
+  await t('daily job: only with the secret, publishes the next five CS students once a day', async () => {
+    for (let i = 1; i <= 7; i++) { const sr = await getDb().submit(mk('23EARCS00' + i, i)); assert.strictEqual(sr.ok, true, JSON.stringify(sr)); }
+    for (let i = 1; i <= 2; i++) assert.strictEqual((await getDb().submit(mk('23EARIT00' + i, 10 + i))).ok, true);
+    assert.strictEqual((await call(cronApi, { method: 'GET', headers: {} })).status, 401, 'no secret');
+    assert.strictEqual((await call(cronApi, { method: 'GET', headers: { authorization: 'Bearer wrong' } })).status, 401, 'wrong secret');
+    const r = await call(cronApi, { method: 'GET', headers: { authorization: 'Bearer cron-test-secret' } });
+    assert.strictEqual(r.status, 200, r.text);
+    assert.deepStrictEqual([r.json.ok, r.json.branch, r.json.rolls.length, r.json.companies], [true, 'CS', 5, 25]);
+    const again = await call(cronApi, { method: 'GET', headers: { authorization: 'Bearer cron-test-secret' } });
+    assert.strictEqual(again.json.existing, true, 'running it twice on one day changes nothing');
+    const next = await publishNext(getDb(), { date: '2099-01-01', source: 'auto' });
+    assert.deepStrictEqual([next.branch, next.rolls], ['CS', ['23EARCS006', '23EARCS007']], 'the next day continues where it stopped');
+    const it = await publishNext(getDb(), { date: '2099-01-02', source: 'auto' });
+    assert.deepStrictEqual([it.branch, it.rolls.length], ['IT', 2], 'IT starts after CS is complete');
+  });
+  await t('apply page data: shows the student name and roll, never email, revenue, package or review status', async () => {
+    const r = await acall('batches', {}, 'GET');
+    assert.strictEqual(r.status, 200);
+    assert(r.json.batches.length >= 3);
+    const today = r.json.batches.find((b) => b.date === r.json.today);
+    assert(today && today.companies.length === 25);
+    batchCompanies = today.companies;
+    const c = batchCompanies[0];
+    assert(c.student_name && c.roll_no && c.name && c.domain_link, JSON.stringify(c));
+    assert.strictEqual(batchCompanies[0].roll_no, '23EARCS001', 'in roll-number order');
+    assert(!/@student\.com|package_lpa|revenue|review_status|email|roll_key/i.test(r.text), 'something private leaked');
+  });
+  await t('apply page: the answer buttons need a login and a click on the company first', async () => {
+    const id = batchCompanies[0].company_id;
+    { const w = await acall('status', { roll: ME.roll, email: 'wrong@student.com' }); assert.strictEqual(w.status, 401, w.text); }
+    const st = await acall('status', ME);
+    assert.strictEqual(st.status, 200);
+    assert.deepStrictEqual([st.json.clicks.length, st.json.responses.length], [0, 0]);
+    let r = await acall('respond', { ...ME, company_id: id, response: 'applied' });
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.json.code, 'click_first', 'answering before opening a link is refused');
+    assert.strictEqual((await acall('click', { roll: ME.roll, email: 'wrong@student.com', company_id: id, link: 'domain' })).status, 401);
+    assert.strictEqual((await acall('click', { ...ME, company_id: id, link: 'nonsense' })).status, 400);
+    assert.strictEqual((await acall('click', { ...ME, company_id: 999999, link: 'domain' })).status, 400, 'only published companies');
+    assert.strictEqual((await acall('click', { ...ME, company_id: id, link: 'domain' })).status, 200);
+    assert.strictEqual((await acall('respond', { roll: ME.roll, email: 'wrong@student.com', company_id: id, response: 'applied' })).status, 401);
+    assert.strictEqual((await acall('respond', { ...ME, company_id: id, response: 'maybe' })).status, 400);
+    assert.strictEqual((await acall('respond', { ...ME, company_id: id, response: 'applied' })).status, 200);
+  });
+  await t('apply page: "could not apply" needs a reason, answers can be changed, and every answer is kept', async () => {
+    const id2 = batchCompanies[1].company_id, id3 = batchCompanies[2].company_id;
+    await acall('click', { ...ME, company_id: id2, link: 'domain' });
+    assert.strictEqual((await acall('respond', { ...ME, company_id: id2, response: 'could_not' })).json.code, 'reason');
+    assert.strictEqual((await acall('respond', { ...ME, company_id: id2, response: 'could_not', reason: 'because' })).json.code, 'reason', 'only the listed reasons');
+    assert.strictEqual((await acall('respond', { ...ME, company_id: id2, response: 'could_not', reason: 'link_not_working', note: 'page not found' })).status, 200);
+    await acall('click', { ...ME, company_id: id3, link: 'fresher' });
+    assert.strictEqual((await acall('respond', { ...ME, company_id: id3, response: 'not_interested' })).status, 200);
+    assert.strictEqual((await acall('respond', { ...ME, company_id: id2, response: 'applied' })).status, 200, 'the student changes their mind');
+    const st = (await acall('status', ME)).json;
+    assert.strictEqual(st.responses.length, 3);
+    const changed = st.responses.find((x) => x.company_id === id2);
+    assert.deepStrictEqual([changed.response, changed.reason, changed.changes], ['applied', '', 1]);
+    assert.strictEqual(st.clicks.length, 3);
+  });
+  await t('apply page: the admin sees the numbers per company and per student, and can download them', async () => {
+    assert.strictEqual((await call(admin, { method: 'GET', query: { action: 'apply_stats' }, headers: { 'x-admin-password': 'wrong' } })).status, 401);
+    const stats = (await call(admin, { method: 'GET', query: { action: 'apply_stats' }, headers: { 'x-admin-password': 'secret-test-pw' } })).json;
+    const co = stats.companies.find((c) => c.company_id === batchCompanies[0].company_id);
+    assert.deepStrictEqual([co.opened, co.applied, co.answered], [1, 1, 1]);
+    const me = stats.students.find((x) => x.roll_no === ME.roll);
+    assert.deepStrictEqual([me.opened, me.applied, me.not_interested, me.answered], [3, 2, 1, 3]);
+    assert.strictEqual(stats.totals.applied, 2);
+    const status = (await call(admin, { method: 'GET', query: { action: 'apply_status' }, headers: { 'x-admin-password': 'secret-test-pw' } })).json;
+    assert(status.days.length >= 3 && status.totals.applied === 2, JSON.stringify(status.totals));
+    const x = await call(admin, { method: 'GET', query: { action: 'apply_xlsx' }, headers: { 'x-admin-password': 'secret-test-pw' } });
+    assert.strictEqual(x.status, 200);
+    assert(x.text.length > 1000, 'an Excel file came back');
+  });
+  await t('apply page: a published day with answers cannot be taken back, an untouched one can', async () => {
+    const date = (await acall('batches', {}, 'GET')).json.today;
+    let r = await adminCall('apply_unpublish', { date });
+    assert.strictEqual(r.status, 409, JSON.stringify(r.json));
+    r = await adminCall('apply_unpublish', { date: '2099-01-02' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.strictEqual((await acall('batches', {}, 'GET')).json.batches.some((b) => b.date === '2099-01-02'), false);
+    const again = await adminCall('apply_publish', { date: '2099-01-02' });
+    assert.strictEqual(again.status, 200, JSON.stringify(again.json));
+    assert.deepStrictEqual([again.json.branch], ['IT'], 'the freed students come up again');
   });
   await t('company change is off by default: only the links and details can be edited', async () => {
     delete process.env.ALLOW_COMPANY_CHANGE;

@@ -440,3 +440,171 @@ revoke all on function restore_company(bigint) from public, anon, authenticated;
 grant execute on function restore_company(bigint) to service_role;
 revoke all on function fix_company(text, text, integer, text, text, text, text, text, text, text, jsonb) from public, anon, authenticated;
 grant execute on function fix_company(text, text, integer, text, text, text, text, text, text, text, jsonb) to service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- Daily companies for students to apply to ("apply" page)
+-- ---------------------------------------------------------------------------
+-- Every day five students' companies are published (CS first, then IT, then AI & DS, in roll-number order).
+-- A student opens a link, then tells us what happened. Everything is kept per student and per company so the
+-- companies and the students can be analysed later.
+create table if not exists apply_batches (
+  id           bigserial primary key,
+  batch_date   date not null unique,                 -- one batch per day (Indian date)
+  branch       text not null,
+  source       text not null default 'manual',       -- auto (the daily job) | manual (published from the admin page)
+  published_at timestamptz not null default now()
+);
+
+create table if not exists apply_items (
+  id               bigserial primary key,
+  batch_id         bigint not null references apply_batches(id) on delete cascade,
+  company_id       bigint not null references companies(id) on delete cascade,
+  student_roll_key text not null,                    -- the student who submitted the company
+  position         smallint not null,
+  unique (batch_id, company_id)
+);
+create index if not exists apply_items_company on apply_items (company_id);
+
+-- a student opened a link of a company (link_kind: domain | fresher)
+create table if not exists apply_clicks (
+  roll_key   text not null,                          -- the student who clicked
+  company_id bigint not null references companies(id) on delete cascade,
+  link_kind  text not null,
+  first_at   timestamptz not null default now(),
+  last_at    timestamptz not null default now(),
+  clicks     integer not null default 1,
+  primary key (roll_key, company_id, link_kind)
+);
+
+-- what the student says happened: applied | could_not | not_interested
+create table if not exists apply_responses (
+  roll_key       text not null,
+  company_id     bigint not null references companies(id) on delete cascade,
+  batch_id       bigint references apply_batches(id) on delete set null,
+  response       text not null,
+  reason         text not null default '',           -- for could_not: link_not_working | job_closed | no_relevant_opening | other
+  note           text not null default '',
+  first_click_at timestamptz,
+  answered_at    timestamptz not null default now(),
+  changes        integer not null default 0,
+  primary key (roll_key, company_id)
+);
+
+-- every answer ever given, including changed ones
+create table if not exists apply_response_log (
+  id         bigserial primary key,
+  at         timestamptz not null default now(),
+  roll_key   text not null,
+  company_id bigint not null,
+  response   text not null,
+  reason     text not null default '',
+  note       text not null default ''
+);
+
+alter table apply_batches      enable row level security;
+alter table apply_items        enable row level security;
+alter table apply_clicks       enable row level security;
+alter table apply_responses    enable row level security;
+alter table apply_response_log enable row level security;
+
+-- Publish one batch: the companies of the given students (already chosen and ordered by the app).
+-- Safe to call twice for the same date: the second call changes nothing.
+create or replace function apply_publish(p_date date, p_branch text, p_rolls text[], p_source text default 'manual')
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_batch bigint;
+  v_count integer;
+begin
+  perform pg_advisory_xact_lock(7001);
+  select id into v_batch from apply_batches where batch_date = p_date;
+  if found then return jsonb_build_object('ok', true, 'existing', true, 'batch_id', v_batch); end if;
+  if p_rolls is null or array_length(p_rolls, 1) is null then return jsonb_build_object('ok', false, 'code', 'empty'); end if;
+  if exists (select 1 from apply_items where student_roll_key = any (p_rolls)) then
+    return jsonb_build_object('ok', false, 'code', 'already');   -- a student of this window was published before
+  end if;
+
+  insert into apply_batches (batch_date, branch, source) values (p_date, p_branch, coalesce(p_source, 'manual')) returning id into v_batch;
+  insert into apply_items (batch_id, company_id, student_roll_key, position)
+  select v_batch, c.id, s.roll_key, c.position
+    from unnest(p_rolls) with ordinality as r(roll_key, ord)
+    join students s on s.roll_key = r.roll_key
+    join companies c on c.student_id = s.id
+   order by r.ord, c.position;
+  get diagnostics v_count = row_count;
+  if v_count = 0 then
+    delete from apply_batches where id = v_batch;
+    return jsonb_build_object('ok', false, 'code', 'empty');
+  end if;
+  return jsonb_build_object('ok', true, 'batch_id', v_batch, 'companies', v_count);
+end;
+$$;
+
+-- A student opened a link. The roll number and the email must match (the same check as the fix page).
+create or replace function apply_record_click(p_roll_key text, p_email text, p_company_id bigint, p_link_kind text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_student students%rowtype;
+begin
+  select * into v_student from students where roll_key = p_roll_key;
+  if not found or v_student.email = '' or lower(v_student.email) <> lower(p_email) then
+    return jsonb_build_object('ok', false, 'code', 'identity');
+  end if;
+  if p_link_kind not in ('domain', 'fresher') then return jsonb_build_object('ok', false, 'code', 'link'); end if;
+  if not exists (select 1 from apply_items where company_id = p_company_id) then
+    return jsonb_build_object('ok', false, 'code', 'missing');   -- only published companies
+  end if;
+  insert into apply_clicks (roll_key, company_id, link_kind) values (p_roll_key, p_company_id, p_link_kind)
+  on conflict (roll_key, company_id, link_kind) do update set last_at = now(), clicks = apply_clicks.clicks + 1;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- A student says what happened. It needs a click on that company first, and a reason when they could not apply.
+create or replace function apply_save_response(p_roll_key text, p_email text, p_company_id bigint, p_response text, p_reason text, p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student students%rowtype;
+  v_first   timestamptz;
+  v_batch   bigint;
+  v_old     apply_responses%rowtype;
+  v_reason  text := coalesce(p_reason, '');
+  v_note    text := left(btrim(coalesce(p_note, '')), 300);
+begin
+  select * into v_student from students where roll_key = p_roll_key;
+  if not found or v_student.email = '' or lower(v_student.email) <> lower(p_email) then
+    return jsonb_build_object('ok', false, 'code', 'identity');
+  end if;
+  if p_response not in ('applied', 'could_not', 'not_interested') then return jsonb_build_object('ok', false, 'code', 'response'); end if;
+  if p_response = 'could_not' and v_reason not in ('link_not_working', 'job_closed', 'no_relevant_opening', 'other') then
+    return jsonb_build_object('ok', false, 'code', 'reason');
+  end if;
+  if p_response <> 'could_not' then v_reason := ''; end if;
+  select batch_id into v_batch from apply_items where company_id = p_company_id order by id limit 1;
+  if v_batch is null then return jsonb_build_object('ok', false, 'code', 'missing'); end if;
+  select min(first_at) into v_first from apply_clicks where roll_key = p_roll_key and company_id = p_company_id;
+  if v_first is null then return jsonb_build_object('ok', false, 'code', 'click_first'); end if;
+
+  select * into v_old from apply_responses where roll_key = p_roll_key and company_id = p_company_id;
+  if found then
+    update apply_responses
+       set response = p_response, reason = v_reason, note = v_note, answered_at = now(),
+           changes = changes + case when v_old.response <> p_response or v_old.reason <> v_reason then 1 else 0 end
+     where roll_key = p_roll_key and company_id = p_company_id;
+  else
+    insert into apply_responses (roll_key, company_id, batch_id, response, reason, note, first_click_at)
+    values (p_roll_key, p_company_id, v_batch, p_response, v_reason, v_note, v_first);
+  end if;
+  insert into apply_response_log (roll_key, company_id, response, reason, note) values (p_roll_key, p_company_id, p_response, v_reason, v_note);
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function apply_publish(date, text, text[], text) from public, anon, authenticated;
+grant execute on function apply_publish(date, text, text[], text) to service_role;
+revoke all on function apply_record_click(text, text, bigint, text) from public, anon, authenticated;
+grant execute on function apply_record_click(text, text, bigint, text) to service_role;
+revoke all on function apply_save_response(text, text, bigint, text, text, text) from public, anon, authenticated;
+grant execute on function apply_save_response(text, text, bigint, text, text, text) to service_role;

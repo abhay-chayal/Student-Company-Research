@@ -265,13 +265,49 @@ const five = (names, extra) => names.map((n) => company(n, null, extra));
       assert.strictEqual((await q("select count(*)::int n from companies where domain_key = 'contested'")).rows[0].n, 1);
     });
 
+    // ---------------- the daily apply page ----------------
+    await t('apply: publishing a window is idempotent per date and never repeats a student', async () => {
+      for (let i = 1; i <= 3; i++) await submit('23APPLY00' + i, 'ap' + i + '@x.com', ['Apco' + i + 'a', 'Apco' + i + 'b', 'Apco' + i + 'c', 'Apco' + i + 'd', 'Apco' + i + 'e']);
+      const a = (await q("select apply_publish('2030-01-01', 'CS', array['23APPLY001','23APPLY002'], 'auto') r")).rows[0].r;
+      assert.strictEqual(a.ok, true, JSON.stringify(a));
+      assert.strictEqual(a.companies, 10);
+      const same = (await q("select apply_publish('2030-01-01', 'CS', array['23APPLY003'], 'auto') r")).rows[0].r;
+      assert.strictEqual(same.existing, true, 'the same date gives back the same batch');
+      assert.strictEqual((await q("select count(*)::int n from apply_items")).rows[0].n, 10);
+      const again = (await q("select apply_publish('2030-01-02', 'CS', array['23APPLY001'], 'auto') r")).rows[0].r;
+      assert.strictEqual(again.ok, false);
+      assert.strictEqual(again.code, 'already');
+      assert.strictEqual((await q("select apply_publish('2030-01-03', 'CS', array[]::text[], 'auto') r")).rows[0].r.code, 'empty');
+    });
+    await t('apply: answers need the right email and a click first; could-not needs a reason; changes are counted', async () => {
+      const item = (await q("select i.company_id id from apply_items i join companies c on c.id = i.company_id join students s on s.id = c.student_id where s.roll_key = '23APPLY001' order by c.position limit 1")).rows[0].id;
+      const click = async (email, kind) => (await q('select apply_record_click($1,$2,$3,$4) r', ['23APPLY003', email, item, kind])).rows[0].r;
+      const respond = async (email, resp, reason) => (await q('select apply_save_response($1,$2,$3,$4,$5,$6) r', ['23APPLY003', email, item, resp, reason || '', ''])).rows[0].r;
+      assert.strictEqual((await click('wrong@x.com', 'domain')).code, 'identity');
+      assert.strictEqual((await respond('ap3@x.com', 'applied')).code, 'click_first');
+      assert.strictEqual((await click('ap3@x.com', 'nonsense')).code, 'link');
+      assert.strictEqual((await click('ap3@x.com', 'domain')).ok, true);
+      assert.strictEqual((await click('AP3@x.com', 'domain')).ok, true, 'email is not case sensitive');
+      assert.strictEqual((await q("select clicks from apply_clicks where roll_key = '23APPLY003' and company_id = $1", [item])).rows[0].clicks, 2);
+      assert.strictEqual((await respond('wrong@x.com', 'applied')).code, 'identity');
+      assert.strictEqual((await respond('ap3@x.com', 'maybe')).code, 'response');
+      assert.strictEqual((await respond('ap3@x.com', 'could_not')).code, 'reason');
+      assert.strictEqual((await respond('ap3@x.com', 'could_not', 'job_closed')).ok, true);
+      assert.strictEqual((await respond('ap3@x.com', 'applied')).ok, true);
+      const row = (await q("select response, reason, changes from apply_responses where roll_key = '23APPLY003' and company_id = $1", [item])).rows[0];
+      assert.deepStrictEqual([row.response, row.reason, row.changes], ['applied', '', 1]);
+      assert.strictEqual((await q("select count(*)::int n from apply_response_log where roll_key = '23APPLY003' and company_id = $1", [item])).rows[0].n, 2, 'every answer is kept');
+      const other = (await q("select c.id from companies c join students s on s.id = c.student_id where s.roll_key = '23APPLY003' limit 1")).rows[0].id;
+      assert.strictEqual((await q('select apply_record_click($1,$2,$3,$4) r', ['23APPLY003', 'ap3@x.com', other, 'domain'])).rows[0].r.code, 'missing', 'only published companies');
+    });
+
     // ---------------- who can read the data ----------------
     await t('the public (anon) role cannot read or call anything', async () => {
       const c = new Client(conn);
       await c.connect();
       try {
         for (const sql of ['select * from students', 'select * from companies', 'select * from reserved_companies', 'select * from company_history', 'select restore_company(1)', "select mentor_decide('X',1,'approved','','Dr')", 'select * from mentor_log', "select save_details('X','x@x.com',1,'{}'::jsonb)",
-          "select submit_entry('X','X','X','x@x.com','[]'::jsonb)", "select fix_company('X','x@x.com',1,'d','','')", "select apply_review('[]'::jsonb)"]) {
+          "select submit_entry('X','X','X','x@x.com','[]'::jsonb)", "select fix_company('X','x@x.com',1,'d','','')", "select apply_review('[]'::jsonb)", 'select * from apply_batches', 'select * from apply_responses', 'select * from apply_clicks', "select apply_publish('2030-02-01','CS',array['X'],'auto')", "select apply_record_click('X','x@x.com',1,'domain')", "select apply_save_response('X','x@x.com',1,'applied','','')"]) {
           await c.query('set role anon');
           await assert.rejects(c.query(sql), /permission denied/i, 'anon must not run: ' + sql);
           await c.query('reset role');

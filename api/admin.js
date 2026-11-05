@@ -1,6 +1,9 @@
 const ExcelJS = require('exceljs');
 const { getDb } = require('../lib/db');
 const { send, readBody, isAdmin } = require('../lib/http');
+const { previewNext, publishNext } = require('../lib/applybatch');
+const { compute, REASONS, RESPONSES } = require('../lib/applystats');
+const { todayIST, BRANCH_LABEL } = require('../lib/rollout');
 
 function editDistanceAtMostOne(a, b) {
   if (Math.abs(a.length - b.length) > 1) return false;
@@ -150,6 +153,66 @@ module.exports = async (req, res) => {
       }
       if (outcome.code === 'missing') return send(res, 404, { ok: false, message: 'That student or company no longer exists.' });
       return send(res, 409, { ok: false, message: 'Someone just took that name or website. Try again.' });
+    }
+
+    // ---- the daily "apply" page ----
+    if (action === 'apply_status') {
+      const batches = await db.applyBatches(60);
+      const next = await previewNext(db);
+      const raw = await db.applyRaw();
+      return send(res, 200, {
+        today: todayIST(),
+        days: batches.map((b) => ({ date: b.batch_date, branch: BRANCH_LABEL[b.branch] || b.branch, companies: b.companies.length, students: [...new Set(b.companies.map((c) => c.roll_no))] })),
+        next: next ? { branch: next.label, students: next.rolls } : null,
+        totals: compute(raw).totals,
+      });
+    }
+    if (action === 'apply_publish' && req.method === 'POST') {
+      const body = readBody(req);
+      const date = body.date ? String(body.date) : todayIST();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return send(res, 400, { ok: false, message: 'Use a date like 2026-11-06.' });
+      const out = await publishNext(db, { date, source: 'manual' });
+      return send(res, out.ok ? 200 : 400, out.ok ? out : { ok: false, message: out.message || (out.code === 'already' ? 'One of these students was published before.' : 'Nothing to publish.') });
+    }
+    if (action === 'apply_unpublish' && req.method === 'POST') {
+      const date = String(readBody(req).date || '');
+      const out = await db.applyUnpublish(date);
+      if (out.ok) return send(res, 200, { ok: true });
+      return send(res, out.code === 'missing' ? 404 : 409, { ok: false, message: out.code === 'has_responses' ? 'Students have already answered for this day, so it cannot be taken back.' : 'No batch for that date.' });
+    }
+    if (action === 'apply_stats') return send(res, 200, compute(await db.applyRaw()));
+    if (action === 'apply_xlsx') {
+      const raw = await db.applyRaw();
+      const stats = compute(raw);
+      const book = new ExcelJS.Workbook();
+      const head = (ws, cols) => {
+        ws.columns = cols.map(([header, width]) => ({ header, width }));
+        ws.getRow(1).eachCell((c) => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } }; c.alignment = { vertical: 'middle', wrapText: true }; });
+        ws.views = [{ state: 'frozen', ySplit: 1 }];
+      };
+      const c = book.addWorksheet('By company');
+      head(c, [['Company', 32], ['Submitted by (roll)', 18], ['Domain', 26], ['Published on', 14], ['Branch', 10], ['Students who opened', 12], ['Applied', 10], ['Could not apply', 12], ['Not interested', 12], ['Link not working', 12], ['Job closed or expired', 12], ['No relevant opening', 12], ['Other', 9]]);
+      stats.companies.forEach((r) => c.addRow([r.company, r.submitted_by, r.domain, r.batch_date, BRANCH_LABEL[r.branch] || r.branch, r.opened, r.applied, r.could_not, r.not_interested, r.link_not_working, r.job_closed, r.no_relevant_opening, r.other]));
+      const st = book.addWorksheet('By student');
+      head(st, [['RTU roll no', 16], ['Student', 28], ['Branch', 10], ['Companies opened', 12], ['Applied', 10], ['Could not apply', 12], ['Not interested', 12], ['Answered in all', 12]]);
+      stats.students.forEach((r) => st.addRow([r.roll_no, r.name, r.branch, r.opened, r.applied, r.could_not, r.not_interested, r.answered]));
+      const all = book.addWorksheet('All answers');
+      head(all, [['RTU roll no', 16], ['Student', 28], ['Company', 32], ['Answer', 18], ['Reason', 26], ['Note', 40], ['Opened the link at', 20], ['Answered at', 20], ['Times changed', 10]]);
+      const nameOf = new Map(raw.students.map((x) => [x.roll_key, x])), compOf = new Map(raw.items.map((x) => [x.company_id, x.company_name]));
+      raw.responses.slice().sort((a, b) => String(b.answered_at).localeCompare(String(a.answered_at))).forEach((r) => {
+        const who = nameOf.get(r.roll_key) || {};
+        all.addRow([who.roll_no || r.roll_key, who.name || '', compOf.get(r.company_id) || '', RESPONSES[r.response] || r.response, REASONS[r.reason] || '', r.note || '', r.first_click_at || '', r.answered_at || '', r.changes || 0]);
+      });
+      const days = book.addWorksheet('Published days');
+      head(days, [['Date', 14], ['Branch', 10], ['Companies', 12]]);
+      const byDay = new Map();
+      raw.items.forEach((i) => { const k = i.batch_date + '|' + i.branch; byDay.set(k, (byDay.get(k) || 0) + 1); });
+      [...byDay.entries()].sort().forEach(([k, n]) => { const [d, b] = k.split('|'); days.addRow([d, BRANCH_LABEL[b] || b, n]); });
+      const buffer = await book.xlsx.writeBuffer();
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="apply-responses.xlsx"');
+      return res.end(Buffer.from(buffer));
     }
 
     if (action === 'delete' && req.method === 'POST') {
