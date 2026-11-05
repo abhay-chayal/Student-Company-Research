@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
   const action = (req.query && req.query.action) || 'batches';
   try {
     if (action === 'batches') {
-      const batches = await db.applyBatches(60);
+      const batches = await db.applyBatches(1) /* only the latest day is shown to students */;
       return send(res, 200, {
         today: todayIST(),
         batches: batches.map((b) => ({
