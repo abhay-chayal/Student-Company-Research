@@ -29,6 +29,7 @@
   .ilabel { flex:0 0 150px; color:var(--muted); font-weight:600; }
   .ivalue { flex:1 1 200px; min-width:0; overflow-wrap:anywhere; color:var(--navy2); }
   .info > .by { padding:8px 12px; margin:0; }
+  button.copy { height:28px; padding:0 10px; font-size:.78rem; }
   a.open { display:inline-block; padding:9px 16px; border-radius:7px; background:var(--navy); color:#fffaf0; text-decoration:none; font:600 .9rem "Segoe UI",system-ui,sans-serif; }
   a.open:hover { background:var(--navy2); }
   a.open.alt { background:var(--paper); color:var(--navy); border:1px solid var(--navy); }
@@ -78,7 +79,7 @@
   function post(action, body) {
     body = body || {};
     if (me) { body.roll = me.roll; body.email = me.email; }
-    return fetch('/api/apply?action=' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    return fetch('/api/apply?action=' + action, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); });
   }
   function save(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* not available */ } }
@@ -137,12 +138,26 @@
       var isMail = h.indexOf('mailto:') === 0;
       var a = el('a', { className: 'ivalue', href: h, textContent: isMail ? value : value.replace(/^https?:\/\//i, '') }, row);
       if (!isMail) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
-      a.addEventListener('click', function () {
-        post('click', { company_id: c.company_id, link: kind }).then(function (res) {
-          if (res.status === 200) { clicked[c.company_id] = true; refresh(); }
-          else note.textContent = res.data.message || 'Could not record that.';
-        });
-      });
+      a.addEventListener('click', function () { markOpened(kind); });
+      if (isMail) {
+        // many students have no mail program set up, so the address can also be copied
+        var cp = el('button', { type: 'button', className: 'plain copy', textContent: 'Copy' }, row);
+        cp.onclick = function () {
+          markOpened(kind);
+          var done = function () { cp.textContent = 'Copied'; setTimeout(function () { cp.textContent = 'Copy'; }, 1800); };
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(done, function () { cp.textContent = value; });
+          else { var t = el('textarea', { value: value }, document.body); t.select(); try { document.execCommand('copy'); done(); } catch (e) { cp.textContent = value; } document.body.removeChild(t); }
+        };
+      }
+    }
+    var openedKinds = {};
+    function markOpened(kind, tries) {
+      openedKinds[kind] = true;
+      clicked[c.company_id] = true; refresh();   // do not wait for the server: the page may be left for a mail app
+      post('click', { company_id: c.company_id, link: kind }).then(function (res) {
+        if (res.status !== 200 && res.status !== 401 && (tries || 0) < 2) setTimeout(function () { markOpened(kind, (tries || 0) + 1); }, 1500);
+        else if (res.status !== 200) note.textContent = res.data.message || 'Could not record that.';
+      }).catch(function () { if ((tries || 0) < 2) setTimeout(function () { markOpened(kind, (tries || 0) + 1); }, 1500); });
     }
     var dom = hrefOf(c.domain_link) && hrefOf(c.domain_link).indexOf('mailto:') === 0;
     var gen = hrefOf(c.general_link) && hrefOf(c.general_link).indexOf('mailto:') === 0;
@@ -165,7 +180,14 @@
 
     function send(response, reason, text) {
       saved.className = 'saved'; saved.textContent = 'Saving...';
-      post('respond', { company_id: c.company_id, response: response, reason: reason || '', note: text || '' }).then(function (res) {
+      var send1 = function () { return post('respond', { company_id: c.company_id, response: response, reason: reason || '', note: text || '' }); };
+      send1().then(function (res) {
+        if (res.data && res.data.code === 'click_first') {
+          var kind = openedKinds.domain ? 'domain' : openedKinds.fresher ? 'fresher' : 'domain';
+          return post('click', { company_id: c.company_id, link: kind }).then(send1);
+        }
+        return res;
+      }).then(function (res) {
         if (res.status === 200) { answers[c.company_id] = { response: response, reason: reason || '', note: text || '' }; refresh(); }
         else { saved.className = 'saved bad'; saved.textContent = res.data.message || 'Could not save.'; }
       }).catch(function () { saved.className = 'saved bad'; saved.textContent = 'Could not reach the server.'; });
