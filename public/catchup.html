@@ -29,6 +29,17 @@
   .ilabel { flex:0 0 150px; color:var(--muted); font-weight:600; }
   .ivalue { flex:1 1 200px; min-width:0; overflow-wrap:anywhere; color:var(--navy2); }
   .info > .by { padding:8px 12px; margin:0; }
+  #tools { position:sticky; top:0; z-index:5; background:var(--bg, #faf6ec); padding:8px 0 10px; }
+  .toolbox { background:var(--paper); border:1px solid var(--line2); border-radius:10px; padding:10px 14px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .chips button { height:32px; padding:0 12px; border-radius:99px; border:1px solid var(--line2); background:var(--paper); font:600 .82rem "Segoe UI",system-ui,sans-serif; cursor:pointer; color:var(--ink); }
+  .chips button.on { background:var(--navy); color:#fffaf0; border-color:var(--navy); }
+  .prog { display:flex; gap:10px 16px; flex-wrap:wrap; align-items:center; font-size:.9rem; }
+  .prog b { color:var(--navy); }
+  .barline { flex:1 1 160px; height:8px; background:#e6e1d3; border-radius:99px; overflow:hidden; min-width:120px; }
+  .barline i { display:block; height:100%; background:var(--ok, #2f7d4f); width:0; transition:width .3s; }
+  .co.next { outline:3px solid #c9972f; outline-offset:2px; }
+  .co.seen { opacity:.72; }
   button.copy { height:28px; padding:0 10px; font-size:.78rem; }
   a.open { display:inline-block; padding:9px 16px; border-radius:7px; background:var(--navy); color:#fffaf0; text-decoration:none; font:600 .9rem "Segoe UI",system-ui,sans-serif; }
   a.open:hover { background:var(--navy2); }
@@ -64,6 +75,7 @@
 
   <p class="note"><b>Catch-up access.</b> Your answers are saved with the real date and time you give them, and are counted against the day the company was published. Apply first, keep the screenshot, then answer.</p>
 
+  <div id="tools"></div>
   <div id="days"><p class="lead" id="loading">Loading the companies...</p></div>
 </main>
 
@@ -122,6 +134,7 @@
     el('h3', { textContent: c.name }, box);
     var meta = el('div', { className: 'meta' }, box);
     if (c.domain) el('span', { className: 'chip', textContent: c.domain }, meta);
+    if (c.__day) el('span', { className: 'chip', textContent: 'Published ' + c.__day }, meta);
     if (c.employee_strength) el('span', { textContent: 'Employees: ' + c.employee_strength }, meta);
     var site = hrefOf(/^https?:/i.test(c.website) ? c.website : (c.website ? 'https://' + c.website : ''));
     if (site) { var a = el('a', { href: site, target: '_blank', rel: 'noopener noreferrer', textContent: c.website.replace(/^https?:\/\//i, '').replace(/\/$/, '') }, meta); a.style.color = 'var(--navy2)'; }
@@ -153,7 +166,9 @@
     var openedKinds = {};
     function markOpened(kind, tries) {
       openedKinds[kind] = true;
-      clicked[c.company_id] = true; refresh();   // do not wait for the server: the page may be left for a mail app
+      var first = !clicked[c.company_id];
+      clicked[c.company_id] = true; refresh();
+      if (!tries) onOpened(c.company_id, first);   // do not wait for the server: the page may be left for a mail app
       post('click', { company_id: c.company_id, link: kind }).then(function (res) {
         if (res.status !== 200 && res.status !== 401 && (tries || 0) < 2) setTimeout(function () { markOpened(kind, (tries || 0) + 1); }, 1500);
         else if (res.status !== 200) note.textContent = res.data.message || 'Could not record that.';
@@ -209,20 +224,92 @@
       if (a) { saved.className = 'saved'; saved.textContent = 'Saved: ' + (a.response === 'applied' ? 'you applied' : a.response === 'could_not' ? 'you could not apply' : 'not interested') + '. You can change it.'; }
     }
     box.refresh = refresh;
+    box.companyId = c.company_id;
     refresh();
     return box;
   }
 
-  function render(data) {
-    var root = $('#days'); root.textContent = '';
-    if (!data || !data.batches.length) { el('p', { className: 'lead', textContent: 'No companies have been published yet.' }, root); return; }
-    data.batches.forEach(function (b, i) {
-      var d = el('details', { className: 'old' }, root);
-      if (i === 0) d.open = true;
-      el('summary', { textContent: dayLabel(b.date) + (b.date === data.today ? ' (today)' : '') + ' - ' + b.companies.length + ' companies' }, d);
-      var wrap = el('div', { className: 'inner' }, d);
-      b.companies.forEach(function (c) { card(wrap, c); });
+  // ---- the role list: the companies I have to open, one after the other ----
+  var VIEW = 'all_roles', listBoxes = [];
+  function roleOf(d) {
+    d = String(d || '').toLowerCase();
+    if (d.indexOf('data analyst') > -1) return 'analyst';
+    if (d.indexOf('cyber') > -1) return '';
+    if (d.indexOf('engineer') > -1 && d.indexOf('software') < 0) return 'engineer';
+    if (d.indexOf('software') > -1) return 'software';
+    if (d.indexOf('developer') > -1 && ['full stack', 'frontend', 'backend', 'mobile', 'salesforce'].every(function (x) { return d.indexOf(x) < 0; })) return 'software';
+    return '';
+  }
+  var VIEWS = [['all_roles', 'Analyst, Engineer and Software roles'], ['analyst', 'Data Analyst'], ['engineer', 'Engineer'], ['software', 'Software Engineer / Developer'], ['days', 'By day (everything)']];
+  function shortDay(iso) { return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
+
+  function updateProgress() {
+    var ids = listBoxes.map(function (b) { return b.companyId; });
+    var opened = ids.filter(function (id) { return clicked[id]; }).length;
+    var answered = ids.filter(function (id) { return answers[id]; }).length;
+    if (!$('#pText')) return;
+    $('#pText').textContent = opened + ' of ' + ids.length + ' opened, ' + answered + ' answered';
+    $('#pBar').style.width = (ids.length ? Math.round(100 * opened / ids.length) : 0) + '%';
+  }
+  function goNext(afterId) {
+    if (!listBoxes.length) return;
+    var start = 0;
+    listBoxes.forEach(function (b, i) { if (b.companyId === afterId) start = i + 1; });
+    var order = listBoxes.slice(start).concat(listBoxes.slice(0, start));
+    var nxt = order.filter(function (b) { return !clicked[b.companyId]; })[0];
+    listBoxes.forEach(function (b) { b.classList.remove('next'); });
+    if (!nxt) { $('#pText').textContent += '. All opened.'; return; }
+    nxt.classList.add('next');
+    nxt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // called after a real click on a link or email; the page then moves to the next company that is still unopened
+  function onOpened(id, first) {
+    listBoxes.forEach(function (b) { if (b.companyId === id) b.classList.add('seen'); });
+    updateProgress();
+    if (VIEW !== 'days') setTimeout(function () { goNext(id); }, 500);
+  }
+
+  function renderTools() {
+    var t = $('#tools'); t.textContent = '';
+    var box = el('div', { className: 'toolbox' }, t);
+    var chips = el('div', { className: 'chips' }, box);
+    VIEWS.forEach(function (v) {
+      var b = el('button', { type: 'button', textContent: v[1], className: v[0] === VIEW ? 'on' : '' }, chips);
+      b.onclick = function () { VIEW = v[0]; render(window.__data); };
     });
+    if (VIEW === 'days') return;
+    var pr = el('div', { className: 'prog' }, box);
+    el('span', { id: 'pText' }, pr);
+    var bl = el('div', { className: 'barline' }, pr); el('i', { id: 'pBar' }, bl);
+    var nx = el('button', { type: 'button', className: 'plain', textContent: 'Go to the next unopened one' }, pr);
+    nx.onclick = function () { goNext(0); };
+  }
+
+  function render(data) {
+    window.__data = data;
+    var root = $('#days'); root.textContent = ''; listBoxes = [];
+    renderTools();
+    if (!data || !data.batches.length) { el('p', { className: 'lead', textContent: 'No companies have been published yet.' }, root); return; }
+    if (VIEW === 'days') {
+      data.batches.forEach(function (b, i) {
+        var d = el('details', { className: 'old' }, root);
+        if (i === 0) d.open = true;
+        el('summary', { textContent: dayLabel(b.date) + (b.date === data.today ? ' (today)' : '') + ' - ' + b.companies.length + ' companies' }, d);
+        var wrap = el('div', { className: 'inner' }, d);
+        b.companies.forEach(function (c) { card(wrap, c); });
+      });
+      return;
+    }
+    var all = [];
+    data.batches.slice().reverse().forEach(function (b) {   // oldest day first
+      b.companies.forEach(function (c) {
+        var r = roleOf(c.domain);
+        if (r && (VIEW === 'all_roles' || VIEW === r)) all.push(Object.assign({}, c, { __day: shortDay(b.date) }));
+      });
+    });
+    if (!all.length) { el('p', { className: 'lead', textContent: 'No companies for this role.' }, root); return; }
+    all.forEach(function (c) { var b = card(root, c); listBoxes.push(b); if (clicked[c.company_id]) b.classList.add('seen'); });
+    updateProgress();
   }
 
   var roll = load('applyRoll'), email = load('applyEmail');
@@ -234,6 +321,7 @@
       if (res.status === 403) { $('#days').textContent = 'You do not have catch-up access. The normal page is /apply.'; return; }
       if (res.status !== 200) { $('#days').textContent = res.data.error || 'Could not load the companies.'; return; }
       render(res.data);
+      setTimeout(function () { goNext(0); }, 400);
     });
   }).catch(function () { $('#days').textContent = 'Could not load the companies. Check your internet and try again.'; });
 })();
