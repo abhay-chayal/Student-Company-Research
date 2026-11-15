@@ -5,6 +5,7 @@ delete process.env.SUPABASE_URL;
 process.env.ADMIN_PASSWORD = 'secret-test-pw';
 process.env.MENTOR_PASSWORD = 'mentor-test-pw';
 process.env.CRON_SECRET = 'cron-test-secret';
+process.env.CATCHUP_ROLLS = '23EARCS002, 23earcs004';
 process.env.ALLOW_COMPANY_CHANGE = '1'; // for the tests that replace a company; one test below turns it off
 const assert = require('assert');
 const { nameKey, coreKey, websiteKey, rollNumber, emailAddress, hiringLink, domainText } = require('../lib/normalize');
@@ -674,6 +675,28 @@ const EMAIL = 'student@gmail.com';
     assert.strictEqual(twice.status, 409, 'a second admin cannot publish again on the same day: ' + JSON.stringify(twice.json));
     assert.strictEqual((await adminCall('apply_publish', { date: '2099-06-01' })).status, 409, 'a date typed in is ignored');
     assert.strictEqual((await acall('batches', {}, 'GET')).json.batches.filter((b) => b.date === rollout.todayIST()).length, 1);
+  });
+  await t('catch-up: only the listed students see and answer earlier days, with the real time', async () => {
+    const A = { roll: '23EARCS002', email: 'apply2@student.com' }, B = { roll: '23EARCS003', email: 'apply3@student.com' };
+    let r = await acall('catchup_batches', B);
+    assert.strictEqual(r.status, 403, 'a student without access is refused');
+    assert.strictEqual((await acall('catchup_batches', { roll: A.roll, email: 'wrong@student.com' })).status, 401);
+    r = await acall('catchup_batches', A);
+    assert.strictEqual(r.status, 200, r.text);
+    assert(r.json.batches.length >= 2, 'earlier days are listed');
+    assert(!/@student\.com|package_lpa|revenue|review_status|roll_key/i.test(r.text), 'something private leaked');
+    const old = r.json.batches.find((b) => b.date === '2020-01-01').companies[0].company_id;
+    assert.strictEqual((await acall('click', { ...B, company_id: old, link: 'domain' })).status, 403, 'an ordinary student cannot touch an earlier day');
+    assert.strictEqual((await acall('respond', { ...B, company_id: old, response: 'applied' })).status, 403);
+    assert.strictEqual((await acall('respond', { ...A, company_id: old, response: 'applied' })).json.code, 'click_first', 'the click still has to come first');
+    assert.strictEqual((await acall('click', { ...A, company_id: old, link: 'domain' })).status, 200);
+    const before = Date.now();
+    assert.strictEqual((await acall('respond', { ...A, company_id: old, response: 'applied' })).status, 200);
+    const raw = await getDb().applyRaw();
+    const mine = raw.responses.find((x) => x.roll_key === A.roll && x.company_id === old);
+    assert(mine && Math.abs(new Date(mine.answered_at).getTime() - before) < 15000, 'saved with the real time, not an invented one');
+    const item = raw.items.find((i) => i.company_id === old);
+    assert.strictEqual(item.batch_date, '2020-01-01', 'counted against the day the company was published');
   });
   await t('company change is off by default: only the links and details can be edited', async () => {
     delete process.env.ALLOW_COMPANY_CHANGE;

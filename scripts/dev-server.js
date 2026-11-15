@@ -41,6 +41,7 @@ http.createServer((req, res) => {
   if (file === '/mentor') file = '/mentor.html';
   if (file === '/apply') file = '/apply.html';
   if (file === '/apply-login') file = '/apply-login.html';
+  if (file === '/catchup') file = '/catchup.html';
   const full = path.join(ROOT, 'public', path.normalize(file));
   if (!full.startsWith(path.join(ROOT, 'public')) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
     res.statusCode = 404;
