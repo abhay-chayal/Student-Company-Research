@@ -1,7 +1,7 @@
 const ExcelJS = require('exceljs');
 const { getDb } = require('../lib/db');
 const { send, readBody, isAdmin } = require('../lib/http');
-const { previewNext, publishNext } = require('../lib/applybatch');
+const { publishAll } = require('../lib/applybatch');
 const { compute, REASONS, RESPONSES } = require('../lib/applystats');
 const { todayIST, BRANCH_LABEL } = require('../lib/rollout');
 
@@ -158,20 +158,20 @@ module.exports = async (req, res) => {
     // ---- the daily "apply" page ----
     if (action === 'apply_status') {
       const batches = await db.applyBatches(60);
-      const next = await previewNext(db);
       const raw = await db.applyRaw();
       return send(res, 200, {
         today: todayIST(),
         days: batches.map((b) => ({ date: b.batch_date, branch: BRANCH_LABEL[b.branch] || b.branch, companies: b.companies.length, students: [...new Set(b.companies.map((c) => c.roll_no))] })),
-        next: next ? { branch: next.label, students: next.rolls } : null,
         totals: compute(raw).totals,
       });
     }
     if (action === 'apply_publish' && req.method === 'POST') {
-      // Manual publishing is only ever for today, and only once: a second admin clicking again changes nothing.
-      const out = await publishNext(db, { date: todayIST(), source: 'manual' });
-      if (out.ok && out.existing) return send(res, 409, { ok: false, existing: true, message: "Today's companies are already published. Nothing more can be published today." });
-      return send(res, out.ok ? 200 : 400, out.ok ? out : { ok: false, message: out.message || (out.code === 'already' ? 'One of these students was published before.' : 'Nothing to publish.') });
+      // Publishes every company of the CS, IT and AI & DS students that is not published yet, all at once. A second click
+      // (or a second admin) finds nothing left to publish and changes nothing.
+      const out = await publishAll(db, { source: 'manual' });
+      if (!out.ok) return send(res, 400, { ok: false, message: 'Could not publish.' });
+      if (!out.companies) return send(res, 409, { ok: false, existing: true, message: 'Everything is already published. Nothing more to publish.' });
+      return send(res, 200, { ok: true, companies: out.companies });
     }
     if (action === 'apply_unpublish' && req.method === 'POST') {
       const date = String(readBody(req).date || '');

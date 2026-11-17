@@ -21,11 +21,7 @@
       "source": "/apply",
       "destination": "/apply.html"
     },
-    { "source": "/apply-login", "destination": "/apply-login.html" },
-    { "source": "/catchup", "destination": "/catchup.html" }
-  ],
-  "crons": [
-    { "path": "/api/publish-daily", "schedule": "30 0 * * *" }
+    { "source": "/apply-login", "destination": "/apply-login.html" }
   ],
   "installCommand": "npm install --omit=dev"
 }

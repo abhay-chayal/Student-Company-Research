@@ -541,6 +541,35 @@ begin
 end;
 $$;
 
+-- Publishes every company of the CS, IT and AI & DS students that is not published yet, in one batch. Safe to run twice: the
+-- second time there is nothing left, so nothing changes.
+create or replace function apply_publish_all(p_source text default 'manual')
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_batch bigint;
+  v_date  date;
+  v_count integer;
+begin
+  perform pg_advisory_xact_lock(7001);
+  if not exists (
+    select 1 from companies c join students s on s.id = c.student_id
+     where upper(s.roll_key) ~ 'EAR(CS|IT|AD)' and not exists (select 1 from apply_items i where i.company_id = c.id)
+  ) then
+    return jsonb_build_object('ok', true, 'companies', 0);
+  end if;
+  select coalesce(max(batch_date), (now() at time zone 'Asia/Kolkata')::date) + 1 into v_date from apply_batches;
+  insert into apply_batches (batch_date, branch, source) values (v_date, 'ALL', coalesce(p_source, 'manual')) returning id into v_batch;
+  insert into apply_items (batch_id, company_id, student_roll_key, position)
+  select v_batch, c.id, s.roll_key, c.position
+    from companies c join students s on s.id = c.student_id
+   where upper(s.roll_key) ~ 'EAR(CS|IT|AD)' and not exists (select 1 from apply_items i where i.company_id = c.id)
+   order by s.roll_key, c.position;
+  get diagnostics v_count = row_count;
+  return jsonb_build_object('ok', true, 'batch_id', v_batch, 'companies', v_count);
+end;
+$$;
+
 -- A student opened a link. The roll number and the email must match (the same check as the fix page).
 create or replace function apply_record_click(p_roll_key text, p_email text, p_company_id bigint, p_link_kind text)
 returns jsonb
@@ -602,6 +631,8 @@ begin
 end;
 $$;
 
+revoke all on function apply_publish_all(text) from public, anon, authenticated;
+grant execute on function apply_publish_all(text) to service_role;
 revoke all on function apply_publish(date, text, text[], text) from public, anon, authenticated;
 grant execute on function apply_publish(date, text, text[], text) to service_role;
 revoke all on function apply_record_click(text, text, bigint, text) from public, anon, authenticated;

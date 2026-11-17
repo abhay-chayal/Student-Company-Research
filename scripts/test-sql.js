@@ -301,13 +301,29 @@ const five = (names, extra) => names.map((n) => company(n, null, extra));
       assert.strictEqual((await q('select apply_record_click($1,$2,$3,$4) r', ['23APPLY003', 'ap3@x.com', other, 'domain'])).rows[0].r.code, 'missing', 'only published companies');
     });
 
+    await t('apply: publish-all puts every CS, IT and AI & DS company live once, and never twice', async () => {
+      await submit('23EARCS901', 'pa1@x.com', ['Pubco A1', 'Pubco A2', 'Pubco A3', 'Pubco A4', 'Pubco A5']);
+      await submit('23EARIT901', 'pa2@x.com', ['Pubco B1', 'Pubco B2', 'Pubco B3', 'Pubco B4', 'Pubco B5']);
+      await submit('23EARME901', 'pa3@x.com', ['Pubco C1', 'Pubco C2', 'Pubco C3', 'Pubco C4', 'Pubco C5']);
+      const a = (await q("select apply_publish_all('manual') r")).rows[0].r;
+      assert.strictEqual(a.ok, true, JSON.stringify(a));
+      assert.strictEqual(a.companies, 10, 'the ME student is not included');
+      assert.strictEqual((await q("select count(*)::int n from apply_items i join companies c on c.id = i.company_id where c.name like 'Pubco C%'")).rows[0].n, 0);
+      const again = (await q("select apply_publish_all('manual') r")).rows[0].r;
+      assert.strictEqual(again.companies, 0, 'a second run finds nothing new');
+      await submit('23EARAD901', 'pa4@x.com', ['Pubco D1', 'Pubco D2', 'Pubco D3', 'Pubco D4', 'Pubco D5']);
+      const third = (await q("select apply_publish_all('manual') r")).rows[0].r;
+      assert.strictEqual(third.companies, 5, 'only the new student is added');
+      assert.strictEqual((await q("select count(*)::int n from (select company_id from apply_items group by company_id having count(*) > 1) x")).rows[0].n, 0, 'no company twice');
+    });
+
     // ---------------- who can read the data ----------------
     await t('the public (anon) role cannot read or call anything', async () => {
       const c = new Client(conn);
       await c.connect();
       try {
         for (const sql of ['select * from students', 'select * from companies', 'select * from reserved_companies', 'select * from company_history', 'select restore_company(1)', "select mentor_decide('X',1,'approved','','Dr')", 'select * from mentor_log', "select save_details('X','x@x.com',1,'{}'::jsonb)",
-          "select submit_entry('X','X','X','x@x.com','[]'::jsonb)", "select fix_company('X','x@x.com',1,'d','','')", "select apply_review('[]'::jsonb)", 'select * from apply_batches', 'select * from apply_responses', 'select * from apply_clicks', "select apply_publish('2030-02-01','CS',array['X'],'auto')", "select apply_record_click('X','x@x.com',1,'domain')", "select apply_save_response('X','x@x.com',1,'applied','','')"]) {
+          "select submit_entry('X','X','X','x@x.com','[]'::jsonb)", "select fix_company('X','x@x.com',1,'d','','')", "select apply_review('[]'::jsonb)", 'select * from apply_batches', 'select * from apply_responses', 'select * from apply_clicks', "select apply_publish('2030-02-01','CS',array['X'],'auto')", "select apply_publish_all('manual')", "select apply_record_click('X','x@x.com',1,'domain')", "select apply_save_response('X','x@x.com',1,'applied','','')"]) {
           await c.query('set role anon');
           await assert.rejects(c.query(sql), /permission denied/i, 'anon must not run: ' + sql);
           await c.query('reset role');

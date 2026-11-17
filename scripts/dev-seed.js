@@ -34,14 +34,21 @@ async function seed() {
     ...['Zeta One', 'Zeta Two', 'Zeta Three', 'Zeta Four', 'Zeta Five'].map((n) => ({ roll: '99TEST002', name_key: nameKey(n).key, status: 'accepted', reason: '' })),
   ];
   await db.applyReview(items);
-  // Fake CS students for the daily apply page, and today's first batch.
-  for (let n = 1; n <= 6; n++) {
+  // Fake CS students for the apply page (150 companies with names from A to Z), all of them published.
+  const PRE = ['Acme', 'Brightlabs', 'Cobalt', 'Delta', 'Evergreen', 'Fusion', 'Gamma', 'Helix', 'Ionic', 'Juniper', 'Kite', 'Lumen', 'Meridian', 'Nimbus', 'Orbit', 'Pixel', 'Quanta', 'Rivet', 'Summit', 'Tessera', 'Umbra', 'Vertex', 'Willow', 'Xenon', 'Yonder', 'Zephyr'];
+  const SUF = ['Tech', 'Labs', 'Systems', 'Software'];
+  const DOM = ['Data Engineer', 'Data Analyst', 'Software enginner', 'General (not domain specific)', 'Marketing', 'Full Stack Developer', 'ML / AI Engineer'];
+  for (let n = 1; n <= 30; n++) {
+    const roll = '99EARCS' + String(n).padStart(3, '0');
     await db.submit({
-      rollNo: '99EARCS00' + n, rollKey: '99EARCS00' + n, name: 'Fake CS Student ' + n, email: 'cs' + n + '@test.dev',
-      companies: [1, 2, 3, 4, 5].map((j) => company('Fakeco ' + n + '-' + j, `fakeco${n}-${j}-qa-test.com`, 'Data Engineer', j === 5 ? `hr@fakeco${n}-${j}-qa-test.com` : `https://fakeco${n}-${j}-qa-test.com/jobs/role`, j === 3 ? `https://fakeco${n}-${j}-qa-test.com/freshers` : j === 4 ? `hr@fakeco${n}-${j}-qa-test.com` : '', DETAILS)),
+      rollNo: roll, rollKey: roll, name: 'Fake CS Student ' + n, email: 'cs' + n + '@test.dev',
+      companies: [1, 2, 3, 4, 5].map((j) => {
+        const idx = n * 5 + j, nm = PRE[idx % 26] + ' ' + SUF[idx % 4] + ' ' + idx, slug = nm.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return company(nm, `${slug}-qa-test.com`, DOM[idx % DOM.length], j === 5 ? `hr@${slug}-qa-test.com` : `https://${slug}-qa-test.com/jobs/role`, j === 3 ? `https://${slug}-qa-test.com/freshers` : j === 4 ? `hr@${slug}-qa-test.com` : '', DETAILS);
+      }),
     });
   }
-  await require('../lib/applybatch').publishNext(db, { source: 'auto' });
+  await require('../lib/applybatch').publishAll(db, { source: 'manual' });
   console.log('Dev seed: Test Student One (99TEST001 / one@test.dev) has 2 accepted, 3 to fix; Test Student Two (99TEST002 / two@test.dev) has all accepted.');
 }
 

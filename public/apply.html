@@ -6,7 +6,8 @@
 <title>Companies to apply to</title>
 <link rel="stylesheet" href="/style.css">
 <style>
-  main.wrap { padding-bottom:70px; }
+  main.wrap { padding-bottom:70px; max-width:1140px; }
+  .hero .wrap { max-width:1140px; }
   .lead { color:var(--muted); margin:0 0 14px; }
   .me { display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:space-between; }
   .me b { color:var(--navy); }
@@ -29,6 +30,48 @@
   .ilabel { flex:0 0 150px; color:var(--muted); font-weight:600; }
   .ivalue { flex:1 1 200px; min-width:0; overflow-wrap:anywhere; color:var(--navy2); }
   .info > .by { padding:8px 12px; margin:0; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; margin:2px 0 18px; }
+  .tile { text-align:left; padding:12px 14px; border:1px solid var(--line2); border-radius:10px; background:var(--paper); cursor:pointer; font:700 .92rem "Segoe UI",system-ui,sans-serif; color:var(--ink); line-height:1.25; }
+  .tile small { display:block; margin-top:3px; font-weight:500; color:var(--muted); }
+  .tile:hover { background:var(--tint); }
+  .tile.on { background:var(--navy); border-color:var(--navy); color:#fffaf0; }
+  .tile.on small { color:#e3c78a; }
+  .lhead { margin:2px 0 10px; }
+  .lhead h2 { margin:0 0 2px; font-size:1.25rem; color:var(--navy); }
+  .lhead small { color:var(--muted); font-size:.86rem; }
+  .tb { position:sticky; top:0; z-index:4; background:var(--cream); padding:8px 0 10px; margin-bottom:10px; }
+  .tb input[type=search] { width:100%; height:46px; padding:0 14px 0 42px; border:1px solid var(--line2); border-radius:12px; font:inherit; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%236d675b' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") 14px center no-repeat; box-shadow:0 1px 2px rgba(30,58,95,.06); }
+  .tb input[type=search]:focus { outline:2px solid var(--navy2); outline-offset:1px; }
+  .listwrap { display:flex; gap:6px; align-items:flex-start; }
+  .rows { flex:1 1 auto; min-width:0; background:var(--paper); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(30,58,95,.05); }
+  .crow { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:13px 16px; background:transparent; border:0; border-bottom:1px solid var(--line); cursor:pointer; font:inherit; color:inherit; scroll-margin-top:84px; }
+  .crow:last-child { border-bottom:0; }
+  .crow:hover { background:#fbf7ea; }
+  .cb { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; }
+  .cn { font:700 1rem "Segoe UI",system-ui,sans-serif; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cr { font-size:.82rem; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cta { flex:0 0 auto; min-width:92px; text-align:center; padding:8px 18px; border-radius:99px; font:700 .86rem "Segoe UI",system-ui,sans-serif; background:#1f8a70; color:#fff; box-shadow:0 2px 6px rgba(31,138,112,.25); transition:background .15s, transform .08s; }
+  .crow:hover .cta { background:#187560; }
+  .crow:active .cta { transform:scale(.97); }
+  .cta.s-applied { background:#e6e4de; color:#6b6b66; box-shadow:none; }
+  .cta.s-could_not { background:#f6ecd8; color:#8a5a12; box-shadow:none; }
+  .cta.s-not_interested { background:#e6e4de; color:#6b6b66; box-shadow:none; }
+  .index { flex:0 0 32px; position:sticky; top:92px; align-self:flex-start; height:min(600px, 76vh); padding:8px 0; display:flex; flex-direction:column; align-items:center; background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:0 2px 10px rgba(30,58,95,.07); touch-action:none; user-select:none; -webkit-user-select:none; cursor:pointer; isolation:isolate; }
+  .ix { position:relative; flex:1 1 0; min-height:0; width:100%; display:grid; place-items:center; font:600 .7rem/1 "Segoe UI",system-ui,sans-serif; color:#5f7390; transition:color .12s, font-size .12s; }
+  .ix.off { opacity:.28; }
+  .ix::before { content:''; position:absolute; left:50%; top:50%; width:26px; height:26px; border-radius:50%; background:var(--navy); transform:translate(-50%, -50%) scale(0); transition:transform .14s ease-out; z-index:-1; }
+  .ix.act { color:#fffaf0; font-size:1rem; font-weight:700; }
+  .ix.act::before { transform:translate(-50%, -50%) scale(1); }
+  #bubble { position:fixed; left:50%; top:42%; transform:translate(-50%, -50%) scale(.8); width:92px; height:92px; border-radius:22px; display:grid; place-items:center; background:rgba(30,58,95,.92); color:#fffaf0; font:700 3rem Georgia,serif; opacity:0; pointer-events:none; transition:opacity .15s, transform .15s; z-index:30; }
+  #bubble.on { opacity:1; transform:translate(-50%, -50%) scale(1); }
+  body.viewing #bubble { display:none; }
+  .empty { padding:40px 20px; text-align:center; color:var(--muted); border:1px dashed var(--line2); border-radius:12px; }
+  #detailview { max-width:780px; margin:0 auto; }
+  .backlink { height:40px; margin-bottom:12px; }
+  #detailview .co { padding:22px 22px 18px; }
+  #detailview .co h3 { font-size:1.4rem; }
+  body.viewing .hero, body.viewing #meBox, body.viewing .note, body.viewing #tiles, body.viewing #days, body.viewing #listview { display:none !important; }
+  @media (max-width:560px) { #detailview .co { padding:16px 14px 14px; } .tiles { grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:12px; } .tile { padding:10px 11px; font-size:.84rem; } }
   button.copy { height:28px; padding:0 10px; font-size:.78rem; }
   a.open { display:inline-block; padding:9px 16px; border-radius:7px; background:var(--navy); color:#fffaf0; text-decoration:none; font:600 .9rem "Segoe UI",system-ui,sans-serif; }
   a.open:hover { background:var(--navy2); }
@@ -55,7 +98,7 @@
   <div class="wrap">
     <div class="eyebrow">Foundation Course &nbsp;&middot;&nbsp; FEC-28</div>
     <h1>Companies to apply to</h1>
-    <p>These companies are for every student. Visit each one, look for a role that suits you and apply. Then tell us how it went.</p>
+    <p>Choose your domain below. Visit the companies, look for a role that suits you and apply. Then tell us how it went.</p>
   </div>
 </header>
 
@@ -64,7 +107,10 @@
 
   <p class="note"><b>Before you apply:</b> attach your updated resume and fill in every detail of the application correctly.</p>
 
+  <div id="tiles" class="tiles"></div>
   <div id="days"><p class="lead" id="loading">Loading the companies...</p></div>
+  <div id="listview" hidden></div>
+  <div id="detailview" hidden></div>
 </main>
 
 <script>
@@ -95,6 +141,7 @@
   function login(roll, email) {
     me = { roll: roll, email: email, name: '' };
     return post('status', {}).then(function (res) {
+      if (res.status === 403) { me = null; return 'branch'; }
       if (res.status !== 200) { me = null; return false; }
       me.name = res.data.name || '';
       applyStatus(res.data);
@@ -153,7 +200,8 @@
     var openedKinds = {};
     function markOpened(kind, tries) {
       openedKinds[kind] = true;
-      clicked[c.company_id] = true; refresh();   // do not wait for the server: the page may be left for a mail app
+      clicked[c.company_id] = true; refresh();
+      if (!tries) changed(c.company_id);
       post('click', { company_id: c.company_id, link: kind }).then(function (res) {
         if (res.status !== 200 && res.status !== 401 && (tries || 0) < 2) setTimeout(function () { markOpened(kind, (tries || 0) + 1); }, 1500);
         else if (res.status !== 200) note.textContent = res.data.message || 'Could not record that.';
@@ -188,7 +236,7 @@
         }
         return res;
       }).then(function (res) {
-        if (res.status === 200) { answers[c.company_id] = { response: response, reason: reason || '', note: text || '' }; refresh(); }
+        if (res.status === 200) { answers[c.company_id] = { response: response, reason: reason || '', note: text || '' }; refresh(); changed(c.company_id); }
         else { saved.className = 'saved bad'; saved.textContent = res.data.message || 'Could not save.'; }
       }).catch(function () { saved.className = 'saved bad'; saved.textContent = 'Could not reach the server.'; });
     }
@@ -213,34 +261,165 @@
     return box;
   }
 
-  function render(data) {
-    var root = $('#days'); root.textContent = '';
-    if (!data || !data.batches.length) { el('p', { className: 'lead', textContent: 'No companies have been published yet. Please check again soon.' }, root); return; }
-    today = data.today;
-    data.batches.forEach(function (b, i) {
-      var isToday = b.date === data.today;
-      var wrap;
-      if (isToday || i === 0) {
-        wrap = el('div', {}, root);
-        var h = el('div', { className: 'day' }, wrap);
-        el('h2', { textContent: (isToday ? 'Today: ' : 'Latest: ') + dayLabel(b.date) }, h);
-        el('small', { textContent: b.companies.length + ' companies, for all students' }, h);
-      } else {
-        var d = el('details', { className: 'old' }, root);
-        el('summary', { textContent: dayLabel(b.date) + ' (' + b.companies.length + ' companies)' }, d);
-        wrap = el('div', { className: 'inner' }, d);
-      }
-      b.companies.forEach(function (c) { card(wrap, c); });
+  // ---- the domain tiles; under the chosen tile a list of companies; a tap opens that company's page alone ----
+  var DATA = null, VIEW = '', LIST = [], VISIBLE = [], FILTER = '', ALL = '__all';
+  var rowEls = {}, ui = {}, listScroll = 0, viewing = false;
+  function statusOf(id) { var a = answers[id]; return a ? a.response : (clicked[id] ? 'opened' : 'new'); }
+  var STATUS_TEXT = { applied: 'Applied', could_not: 'Could not apply', not_interested: 'Not interested', opened: 'Opened', new: '' };
+  function letterOf(name) { var ch = String(name).trim().charAt(0).toUpperCase(); return /[A-Z]/.test(ch) ? ch : '#'; }
+
+  function progress() {
+    if (!ui.sub) return;
+    var done = LIST.filter(function (c) { return answers[c.company_id]; }).length;
+    var opened = LIST.filter(function (c) { return clicked[c.company_id]; }).length;
+    ui.sub.textContent = LIST.length + ' companies, A to Z. ' + opened + ' opened, ' + done + ' answered.';
+  }
+  function paintRow(r, id) {
+    var st = statusOf(id), b = r.querySelector('.cta');
+    b.className = 'cta s-' + st;
+    b.textContent = st === 'applied' ? '\u2713 Applied' : st === 'could_not' ? 'Could not apply' : st === 'not_interested' ? 'Not interested' : st === 'opened' ? 'Continue' : 'Apply';
+  }
+  // called after a real click on a link and after a saved answer
+  function changed(id) { if (rowEls[id]) paintRow(rowEls[id], id); progress(); }
+
+  function pick(name) {
+    VIEW = name; FILTER = '';
+    try { sessionStorage.setItem('applyTile', name); } catch (e) { /* not available */ }
+    drawTiles(); drawList();
+    window.scrollTo({ top: $('#listview').offsetTop - 10, behavior: 'smooth' });
+  }
+  function drawTiles() {
+    var t = $('#tiles'); t.textContent = '';
+    DATA.tiles.concat([{ name: ALL, label: 'All', count: DATA.total }]).forEach(function (x) {
+      var b = el('button', { type: 'button', className: 'tile' + (x.name === VIEW ? ' on' : '') }, t);
+      b.appendChild(document.createTextNode(x.label || x.name));
+      el('small', { textContent: x.count + (x.count === 1 ? ' company' : ' companies') }, b);
+      b.onclick = function () { pick(x.name); };
     });
+  }
+
+  var ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split(''), FIRST = {}, ixEls = {}, activeL = '', scrubbing = false;
+
+  function drawList() {
+    LIST = DATA.companies.filter(function (c) { return VIEW === ALL || c.group === VIEW; });
+    var box = $('#listview'); box.hidden = false; box.textContent = '';
+    var head = el('div', { className: 'lhead' }, box);
+    el('h2', { textContent: VIEW === ALL ? 'All companies' : VIEW }, head);
+    ui.sub = el('small', {}, head);
+    var tb = el('div', { className: 'tb' }, box);
+    var search = el('input', { type: 'search', placeholder: 'Search company name', autocomplete: 'off' }, tb);
+    var wrap = el('div', { className: 'listwrap' }, box);
+    ui.rows = el('div', { className: 'rows' }, wrap);
+    ui.index = el('div', { className: 'index' }, wrap);
+    search.oninput = function () { FILTER = search.value.trim().toLowerCase(); drawRows(); };
+    wireIndex();
+    drawRows(); progress();
+  }
+
+  function drawRows() {
+    VISIBLE = LIST.filter(function (c) { return !FILTER || String(c.name).toLowerCase().indexOf(FILTER) > -1; });
+    ui.rows.textContent = ''; ui.index.textContent = ''; rowEls = {}; FIRST = {}; ixEls = {};
+    VISIBLE.forEach(function (c) {
+      var L = letterOf(c.name);
+      var r = el('button', { type: 'button', className: 'crow' }, ui.rows);
+      var cb = el('span', { className: 'cb' }, r);
+      el('span', { className: 'cn', textContent: c.name }, cb);
+      if (c.domain) el('span', { className: 'cr', textContent: c.domain }, cb);
+      el('span', { className: 'cta' }, r);
+      r.onclick = function () { openCompany(c.company_id); };
+      rowEls[c.company_id] = r; paintRow(r, c.company_id);
+      if (!FIRST[L]) FIRST[L] = r;
+    });
+    if (!VISIBLE.length) el('div', { className: 'empty', textContent: 'No company matches that name.' }, ui.rows);
+    ALPHA.forEach(function (L) { ixEls[L] = el('span', { className: 'ix' + (FIRST[L] ? '' : ' off'), textContent: L }, ui.index); });
+    activeL = ''; onScroll();
+  }
+
+  // ---- the index on the side, like the contacts list of a phone: the letter in view grows, and dragging along it scrubs the list ----
+  function topOf(L) { return FIRST[L].getBoundingClientRect().top + window.scrollY - 84; }
+  function setActive(L) {
+    if (L === activeL) return;
+    activeL = L;
+    ALPHA.forEach(function (x) { if (ixEls[x]) ixEls[x].classList.toggle('act', x === L); });
+  }
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(function () {
+      ticking = false;
+      if (viewing || !ui.rows || !ui.rows.isConnected) return;
+      var now = '';
+      ALPHA.forEach(function (L) { if (FIRST[L] && FIRST[L].getBoundingClientRect().top <= 96) now = L; });
+      if (!now) now = ALPHA.filter(function (L) { return FIRST[L]; })[0] || '';
+      if (!scrubbing) setActive(now);
+    });
+  }
+  var bubble = null;
+  function letterAt(y) {
+    var r = ui.index.getBoundingClientRect();
+    var i = Math.max(0, Math.min(ALPHA.length - 1, Math.floor((y - r.top) / r.height * ALPHA.length)));
+    for (var d = 0; d < ALPHA.length; d++) {
+      if (ALPHA[i + d] && FIRST[ALPHA[i + d]]) return ALPHA[i + d];
+      if (ALPHA[i - d] && FIRST[ALPHA[i - d]]) return ALPHA[i - d];
+    }
+    return '';
+  }
+  function scrub(e) {
+    var L = letterAt(e.clientY); if (!L) return;
+    bubble.textContent = L; bubble.classList.add('on');
+    window.scrollTo({ top: topOf(L), behavior: 'instant' });
+    setActive(L);
+  }
+  function wireIndex() {
+    if (!bubble) { bubble = el('div', { id: 'bubble' }, document.body); window.addEventListener('scroll', onScroll, { passive: true }); window.addEventListener('resize', onScroll); }
+    var ix = ui.index;
+    ix.addEventListener('pointerdown', function (e) { e.preventDefault(); scrubbing = true; try { ix.setPointerCapture(e.pointerId); } catch (x) { /* not available */ } scrub(e); });
+    ix.addEventListener('pointermove', function (e) { if (scrubbing) scrub(e); });
+    var end = function () { if (!scrubbing) return; scrubbing = false; bubble.classList.remove('on'); onScroll(); };
+    ix.addEventListener('pointerup', end); ix.addEventListener('pointercancel', end);
+  }
+
+  // ---- one company on its own page: only the company and a back button ----
+  function openCompany(id) {
+    var c = DATA.companies.filter(function (x) { return x.company_id === id; })[0];
+    if (!c) return;
+    listScroll = window.scrollY; viewing = true;
+    var d = $('#detailview'); d.hidden = false; d.textContent = '';
+    var back = el('button', { type: 'button', className: 'plain backlink', textContent: '\u2190 Back to the list' }, d);
+    back.onclick = function () { if (history.state && history.state.company) history.back(); else closeCompany(); };
+    card(d, c);
+    document.body.classList.add('viewing');
+    try { history.pushState({ company: id }, ''); } catch (e) { /* not available */ }
+    window.scrollTo(0, 0);
+  }
+  function closeCompany() {
+    if (!viewing) return;
+    viewing = false;
+    document.body.classList.remove('viewing');
+    var d = $('#detailview'); d.hidden = true; d.textContent = '';
+    window.scrollTo(0, listScroll);
+  }
+  window.addEventListener('popstate', closeCompany);   // the phone's own back button does the same as ours
+
+  function start() {
+    var root = $('#days'); root.textContent = '';
+    if (!DATA || !DATA.total) { el('p', { className: 'lead', textContent: 'No companies have been published yet. Please check again soon.' }, root); return; }
+    var saved = ''; try { saved = sessionStorage.getItem('applyTile') || ''; } catch (e) { /* not available */ }
+    var names = DATA.tiles.map(function (x) { return x.name; }).concat([ALL]);
+    VIEW = names.indexOf(saved) > -1 ? saved : DATA.tiles[0].name;
+    drawTiles(); drawList();
   }
 
   var roll = load('applyRoll'), email = load('applyEmail');
   if (!roll || !email) { toLogin(); return; }
-  Promise.all([login(roll, email), fetch('/api/apply?action=batches').then(function (r) { return r.json(); })]).then(function (both) {
-    if (both[0] === false) { forget(); toLogin(); return; }
-    if (both[0] === null) { $('#days').textContent = 'Could not reach the server. Check your internet and try again.'; return; }
-    window.__data = both[1];
-    render(both[1]);
+  login(roll, email).then(function (ok) {
+    if (ok === 'branch') { forget(); $('#meBox').hidden = true; $('#days').textContent = 'This page is for CS, IT and AI & DS students.'; return; }
+    if (ok === false) { forget(); toLogin(); return; }
+    if (ok === null) { $('#days').textContent = 'Could not reach the server. Check your internet and try again.'; return; }
+    return post('companies', {}).then(function (res) {
+      if (res.status !== 200) { $('#days').textContent = (res.data && res.data.error) || 'Could not load the companies.'; return; }
+      DATA = res.data; start();
+    });
   }).catch(function () { $('#days').textContent = 'Could not load the companies. Check your internet and try again.'; });
 })();
 </script>

@@ -112,10 +112,10 @@
       </div>
       <div class="card">
         <h2>Publishing</h2>
-        <p class="hint">Every morning at 6:00 AM the next five students are published on their own (CS first, then IT, then AI &amp; DS, in roll-number order). You can also publish by hand.</p>
+        <p class="hint">Daily publishing is off. Every company of the CS, IT and AI &amp; DS students is listed on the apply page automatically, grouped by domain, whether or not it was published before. This button does the same thing by hand and does nothing if everything is already listed. Students see web links only: emails are never shown.</p>
         <p id="aNext" style="margin:0 0 12px"></p>
         <div class="row" style="margin-bottom:6px">
-          <button id="aPublish" type="button">Publish the next five students now</button>
+          <button id="aPublish" type="button">Publish all companies now</button>
           <span class="err" id="aMsg"></span>
         </div>
         <div class="scroll" style="margin-top:12px"><table style="min-width:0"><thead><tr><th>Day</th><th>Branch</th><th>Students</th><th>Companies</th><th></th></tr></thead><tbody id="aDays"></tbody></table></div>
@@ -365,10 +365,7 @@
       var st = both[0], stats = both[1];
       $('#aDaysN').textContent = st.totals.days; $('#aCompaniesN').textContent = st.totals.published_companies;
       $('#aAppliedN').textContent = st.totals.applied; $('#aActiveN').textContent = st.totals.students_active;
-      $('#aNext').textContent = st.next ? 'Next in line: ' + st.next.branch + ', students ' + st.next.students.join(', ') + '.' : 'Every student of CS, IT and AI & DS has been published.';
-      var doneToday = st.days.some(function (d) { return d.date === st.today; });
-      $('#aPublish').disabled = doneToday || !st.next;
-      if (doneToday && !$('#aMsg').textContent) $('#aMsg').textContent = "Today's companies are already published.";
+      $('#aNext').textContent = st.days.length ? 'Published so far: ' + st.totals.published_companies + ' companies.' : 'Nothing is published yet.';
       var days = $('#aDays'); days.textContent = '';
       if (!st.days.length) row(days, [{ text: 'Nothing published yet.' }, '', '', '', '']);
       st.days.forEach(function (d) {
@@ -377,7 +374,7 @@
           if (!confirm('Take back the batch of ' + d.date + '? Students will no longer see it.')) return;
           api('apply_unpublish', { method: 'POST', body: { date: d.date } }).then(function (r) { return r.json(); }).then(function (x) { $('#aMsg').textContent = x.ok ? '' : (x.message || 'Could not take it back.'); loadApply(); });
         };
-        row(days, [d.date + (d.date === st.today ? ' (today)' : ''), d.branch, d.students.join(', '), d.companies, { text: '', node: b }]);
+        row(days, [d.date + (d.date === st.today ? ' (today)' : ''), d.branch, (d.students.length > 8 ? d.students.length + ' students' : d.students.join(', ')), d.companies, { text: '', node: b }]);
       });
       var cb = $('#aCompanies'); cb.textContent = '';
       stats.companies.slice(0, 40).forEach(function (c) { row(cb, [c.company, c.batch_date, c.opened, c.applied, c.could_not, c.not_interested]); });
@@ -438,7 +435,7 @@
   $('#aXlsx').onclick = function () { download('apply_xlsx', 'apply-answers.xlsx'); };
   $('#aPublish').onclick = function () {
     var btn = this;
-    if (!confirm("Publish today's companies now? This can be done only once a day.")) return;
+    if (!confirm('Publish all companies now? Students will see every company at once. Clicking again publishes nothing new.')) return;
     btn.disabled = true; $('#aMsg').textContent = '';
     api('apply_publish', { method: 'POST', body: {} }).then(function (r) { return r.json(); }).then(function (x) {
       btn.disabled = false;
