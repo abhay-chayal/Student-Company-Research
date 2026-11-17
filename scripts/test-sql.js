@@ -301,14 +301,16 @@ const five = (names, extra) => names.map((n) => company(n, null, extra));
       assert.strictEqual((await q('select apply_record_click($1,$2,$3,$4) r', ['23APPLY003', 'ap3@x.com', other, 'domain'])).rows[0].r.code, 'missing', 'only published companies');
     });
 
-    await t('apply: publish-all puts every CS, IT and AI & DS company live once, and never twice', async () => {
+    await t('apply: publish-all puts every company live once, and never twice', async () => {
       await submit('23EARCS901', 'pa1@x.com', ['Pubco A1', 'Pubco A2', 'Pubco A3', 'Pubco A4', 'Pubco A5']);
       await submit('23EARIT901', 'pa2@x.com', ['Pubco B1', 'Pubco B2', 'Pubco B3', 'Pubco B4', 'Pubco B5']);
       await submit('23EARME901', 'pa3@x.com', ['Pubco C1', 'Pubco C2', 'Pubco C3', 'Pubco C4', 'Pubco C5']);
+      const waiting = (await q("select count(*)::int n from companies c where not exists (select 1 from apply_items i where i.company_id = c.id)")).rows[0].n;
       const a = (await q("select apply_publish_all('manual') r")).rows[0].r;
       assert.strictEqual(a.ok, true, JSON.stringify(a));
-      assert.strictEqual(a.companies, 10, 'the ME student is not included');
-      assert.strictEqual((await q("select count(*)::int n from apply_items i join companies c on c.id = i.company_id where c.name like 'Pubco C%'")).rows[0].n, 0);
+      assert.strictEqual(a.companies, waiting, 'every company of every student is included, whatever the branch');
+      assert(waiting >= 15, 'the three new students are among them: ' + waiting);
+      assert.strictEqual((await q("select count(*)::int n from apply_items i join companies c on c.id = i.company_id where c.name like 'Pubco C%'")).rows[0].n, 5);
       const again = (await q("select apply_publish_all('manual') r")).rows[0].r;
       assert.strictEqual(again.companies, 0, 'a second run finds nothing new');
       await submit('23EARAD901', 'pa4@x.com', ['Pubco D1', 'Pubco D2', 'Pubco D3', 'Pubco D4', 'Pubco D5']);

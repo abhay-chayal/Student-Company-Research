@@ -2,7 +2,7 @@ const { send, readBody } = require('../lib/http');
 const { getDb } = require('../lib/db');
 const { rollNumber, emailAddress } = require('../lib/normalize');
 const { branchOf } = require('../lib/rollout');
-const { domainGroup, GENERAL, OTHER } = require('../lib/domaingroups');
+const { domainGroup, isTechRelevant, GENERAL, OTHER } = require('../lib/domaingroups');
 const { publishAll } = require('../lib/applybatch');
 
 // The "apply" page. Every published company is on it at once, grouped by domain. Only CS, IT and AI & DS students can log in.
@@ -26,6 +26,8 @@ const webLink = (v) => (/^https?:\/\/\S+$/i.test(String(v || '').trim()) ? Strin
 /** The version of a company a student may see: web links only, no roll key. null when no link is left. */
 function publicView(c) {
   const { roll_key, ...rest } = c; // the roll key is internal
+  // companies of other branches (EC, EE, ME ...) are listed only when the role is one a CS, IT or AI & DS student can apply to
+  if (!['CS', 'IT', 'AD'].includes(branchOf(roll_key)) && !isTechRelevant(c.domain)) return null;
   const domain_link = webLink(c.domain_link), general_link = webLink(c.general_link);
   if (!domain_link && !general_link) return null;
   return { ...rest, domain_link, general_link, group: domainGroup(c.domain) };

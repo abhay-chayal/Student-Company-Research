@@ -593,6 +593,13 @@ const EMAIL = 'student@gmail.com';
     { name: 'gamma lower', domain: 'Data Analyst', domain_link: JOBLINK, general_link: '' },
     { name: 'Omega Strange', domain: 'Underwater Basket Weaving', domain_link: JOBLINK, general_link: 'apply by mailing us' },
   ].map((c, n) => ({ ...c, name_key: key(c.name), website: 'special' + n + '.com', domain_key: 'dkspecial' + n, employee_strength: '', package_lpa: 6, revenue_amount: 100, revenue_unit: 'Crore', revenue_currency: 'INR', review_status: 'accepted' })) });
+  const ecStudent = () => ({ rollNo: '23EAREC001', rollKey: '23EAREC001', name: 'Ec Student', email: 'apply30@student.com', companies: [
+    { name: 'Ecfull Web', domain: 'Full Stack Developer' },
+    { name: 'Ecembedded Soft', domain: 'Embedded Software' },
+    { name: 'Ecdesign Power', domain: 'Electrical Design Engineer' },
+    { name: 'Ecrobot Works', domain: 'Robotics Engineer' },
+    { name: 'Ecsales House', domain: 'Marketing' },
+  ].map((c, n) => ({ ...c, domain_link: JOBLINK, general_link: '', name_key: key(c.name), website: 'ecstudent' + n + '.com', domain_key: 'dkec' + n, employee_strength: '', package_lpa: 6, revenue_amount: 100, revenue_unit: 'Crore', revenue_currency: 'INR', review_status: 'accepted' })) });
   let batchCompanies = [];
   const ME = { roll: '23EARCS001', email: 'apply1@student.com' };
   const acall = (action, body) => call(applyApi, { method: 'POST', query: { action }, body });
@@ -612,11 +619,12 @@ const EMAIL = 'student@gmail.com';
     for (let i = 1; i <= 7; i++) { const sr = await getDb().submit(mk('23EARCS00' + i, i)); assert.strictEqual(sr.ok, true, JSON.stringify(sr)); }
     for (let i = 1; i <= 2; i++) assert.strictEqual((await getDb().submit(mk('23EARIT00' + i, 10 + i))).ok, true);
     assert.strictEqual((await getDb().submit(special())).ok, true);
-    assert.strictEqual((await getDb().submit(mk('23EAREC001', 30))).ok, true, 'an EC student');
+    assert.strictEqual((await getDb().submit(ecStudent())).ok, true, 'an EC student');
     assert.strictEqual((await adminCall('apply_publish', {}, 'wrong')).status, 401, 'only the admin can publish');
     const first = await adminCall('apply_publish', {});
     assert.strictEqual(first.status, 200, JSON.stringify(first.json));
-    assert.strictEqual(first.json.companies, 9 * 5 + 5, 'nine students and the special one, not the EC student');
+    const everything = (await getDb().listAll()).reduce((n, st) => n + st.companies.length, 0);
+    assert.strictEqual(first.json.companies, everything, 'every company of every student is published; what students see is filtered');
     const again = await adminCall('apply_publish', {});
     assert.strictEqual(again.status, 409, 'a second admin cannot publish again: ' + JSON.stringify(again.json));
     assert.strictEqual((await adminCall('apply_publish', { date: '2099-06-01' })).status, 409, 'a typed date changes nothing');
@@ -641,7 +649,8 @@ const EMAIL = 'student@gmail.com';
     assert(names.includes('Software Engineer / Developer') && names.includes('Data Analyst') && names.includes('Data Engineer'), names.join(' | '));
     assert.strictEqual(r.json.tiles.reduce((n, x) => n + x.count, 0), r.json.total);
     batchCompanies = r.json.companies;
-    assert.strictEqual(r.json.total, 9 * 5 + 4, 'the company that had only an email is left out');
+    const mine = r.json.companies.filter((c) => /^(Applyco|Zeta Corp|Beta General|gamma lower|Omega Strange|Alpha Mailonly|Ec)/.test(c.name));
+    assert.strictEqual(mine.length, 9 * 5 + 4 + 2, 'the email-only company is left out; of the EC student only the two tech roles are listed, got ' + mine.length);
   });
   await t('apply page: a company that was never published is listed anyway, and can be answered', async () => {
     assert.strictEqual((await getDb().submit(mk('23EARCS008', 40))).ok, true);
@@ -654,10 +663,12 @@ const EMAIL = 'student@gmail.com';
     batchCompanies = r.json.companies.filter((c) => !/^Applyco40x/.test(c.name));
     assert.strictEqual((await adminCall('apply_publish', {})).status, 409, 'nothing left for the button to publish');
   });
-  await t('apply page: no email ever, companies A to Z, nothing private, the EC student\'s companies are not there', async () => {
+  await t('apply page: no email ever, companies A to Z, nothing private, only the relevant companies of other branches', async () => {
     const r = await acall('companies', ME);
     assert(!/@|onlymail|package_lpa|revenue|review_status|roll_key|apply\d+@/i.test(r.text), 'an email or something private leaked');
-    assert(!/Applyco30x/.test(r.text), 'EC companies are not published');
+    const seen = batchCompanies.map((c) => c.name);
+    assert(seen.includes('Ecfull Web') && seen.includes('Ecembedded Soft'), 'tech roles of another branch are listed');
+    assert(!/Ecdesign|Ecrobot|Ecsales/.test(r.text), 'electrical, robotics and sales roles of another branch are not');
     const lower = batchCompanies.map((c) => c.name.toLowerCase());
     assert.deepStrictEqual(lower, [...lower].sort((a, b) => a.localeCompare(b)), 'alphabetical');
     const c = batchCompanies.find((x) => x.name === 'Zeta Corp');
